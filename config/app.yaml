@@ -1,0 +1,80 @@
+# Overlay left position in pixels.
+x: 80
+# Overlay top position in pixels.
+y: 80
+# Overlay width in pixels (also controls background render size).
+width: 900
+# Overlay height in pixels (also controls background render size).
+height: 180
+# Use background image native width/height as overlay size (1:1 pixels).
+lock_size_to_bg: true
+
+# Overlay opacity in range [0.0, 1.0].
+opacity: 1.0
+
+# Subtitle font family installed in system.
+font_family: Microsoft YaHei
+# Subtitle font size in pixels.
+font_size: 24
+# Subtitle text color (hex or named color, e.g. "#000000").
+text_color: "#000000"
+# Subtitle text box left offset in overlay.
+text_x: 120
+# Subtitle text box top offset in overlay.
+text_y: 500
+# Subtitle text box width. 0 means auto-fill to overlay right edge.
+text_width: 300
+# Subtitle text box height. 0 means auto-fill to overlay bottom edge.
+text_height: 180
+# Maximum subtitle lines rendered in text box.
+text_max_lines: 4
+# Enable subtitle appear animation.
+text_anim_enable: true
+# Subtitle reveal animation duration in milliseconds.
+text_anim_duration_ms: 220
+# Subtitle reveal front-edge fade width in pixels.
+text_anim_fade_px: 24
+# Deprecated compatibility option. No longer used by default.
+text_anim_offset_y: 10
+# Clear subtitle after idle duration (ms). 0 disables auto-clear.
+subtitle_clear_ms: 2200
+
+# PNG background path.
+bg_image: "base.png"
+
+# Microphone device index. null means default input device.
+device: null
+# Audio sample rate. Recommended 16000 for ASR models.
+samplerate: 16000
+# Audio callback block duration in milliseconds.
+block_ms: 100
+# Internal queue capacity for audio chunks.
+queue_size: 240
+
+# Simple voice activity threshold for energy gate.
+energy_threshold: 0.012
+# Silence duration (ms) to flush one utterance.
+silence_ms: 700
+# Partial update interval for non-streaming models (ms).
+partial_interval_ms: 900
+# Force flush when one utterance exceeds this length (seconds).
+max_segment_seconds: 12.0
+
+# Streaming chunk config [left_context, current_chunk, right_context].
+# Example [0, 10, 5] ~= 600ms current chunk at 16k.
+chunk_size: [0, 10, 5]
+# Streaming encoder look-back chunk count.
+encoder_chunk_look_back: 4
+# Streaming decoder look-back chunk count.
+decoder_chunk_look_back: 1
+
+# ASR model. Use "paraformer-zh-streaming" for real-time mode.
+model: paraformer-zh-streaming
+# VAD model name for non-streaming pipeline.
+vad_model: fsmn-vad
+# Punctuation model name for non-streaming pipeline.
+punc_model: ct-punc
+# Disable VAD model in non-streaming mode.
+disable_vad_model: false
+# Disable punctuation model in non-streaming mode.
+disable_punc_model: false
