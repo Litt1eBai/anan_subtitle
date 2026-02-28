@@ -8,6 +8,8 @@ width: 900
 height: 180
 # Use background image native width/height as overlay size (1:1 pixels).
 lock_size_to_bg: true
+# Keep overlay always on top.
+stay_on_top: true
 
 # Overlay opacity in range [0.0, 1.0].
 opacity: 1.0
@@ -41,6 +43,18 @@ subtitle_clear_ms: 2200
 
 # PNG background path.
 bg_image: "base.png"
+# Background image display width in overlay. 0 uses image original width.
+bg_width: 0
+# Background image display height in overlay. 0 uses image original height.
+bg_height: 0
+# Background image X offset in overlay (drag-adjustable in edit mode).
+bg_offset_x: 0
+# Background image Y offset in overlay (drag-adjustable in edit mode).
+bg_offset_y: 0
+# Show visual settings control panel on startup.
+show_control_panel: false
+# Enable Windows system tray icon (recommended).
+tray_icon_enable: true
 
 # Microphone device index. null means default input device.
 device: null

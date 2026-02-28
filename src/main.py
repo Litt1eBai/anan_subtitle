@@ -10,8 +10,33 @@ import numpy as np
 import sounddevice as sd
 import yaml
 from PySide6.QtCore import QPoint, QRect, Qt, Signal, QObject, QTimer, QElapsedTimer
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPixmap, QLinearGradient, QPen, QBrush
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtGui import (
+    QAction,
+    QColor,
+    QFont,
+    QFontMetrics,
+    QPainter,
+    QPixmap,
+    QLinearGradient,
+    QPen,
+    QBrush,
+    QIcon,
+    QCloseEvent,
+)
+from PySide6.QtWidgets import (
+    QApplication,
+    QWidget,
+    QCheckBox,
+    QFormLayout,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QPushButton,
+    QSpinBox,
+    QSystemTrayIcon,
+    QVBoxLayout,
+)
 
 from funasr import AutoModel
 
@@ -23,6 +48,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "width": 900,
     "height": 180,
     "lock_size_to_bg": True,
+    "stay_on_top": True,
     "opacity": 1.0,
     "font_family": "Microsoft YaHei",
     "font_size": 30,
@@ -38,6 +64,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "text_anim_offset_y": 10,
     "subtitle_clear_ms": 2200,
     "bg_image": "base.png",
+    "bg_width": 0,
+    "bg_height": 0,
+    "bg_offset_x": 0,
+    "bg_offset_y": 0,
+    "show_control_panel": False,
+    "tray_icon_enable": True,
     "device": None,
     "samplerate": 16000,
     "block_ms": 100,
@@ -175,6 +207,10 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         "text_anim_fade_px",
         "text_anim_offset_y",
         "subtitle_clear_ms",
+        "bg_width",
+        "bg_height",
+        "bg_offset_x",
+        "bg_offset_y",
         "samplerate",
         "block_ms",
         "queue_size",
@@ -186,6 +222,9 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     float_fields = {"opacity", "energy_threshold", "max_segment_seconds"}
     bool_fields = {
         "lock_size_to_bg",
+        "stay_on_top",
+        "show_control_panel",
+        "tray_icon_enable",
         "text_anim_enable",
         "disable_vad_model",
         "disable_punc_model",
@@ -253,17 +292,33 @@ class AppSignals(QObject):
 
 
 class SubtitleOverlay(QWidget):
+    settings_changed = Signal(dict)
+    edit_mode_changed = Signal(bool)
+
     def __init__(self, args: argparse.Namespace) -> None:
         super().__init__()
         self._subtitle_text = ""
         self._status_text = "模型加载中..."
+        self._interaction_mode: str | None = None
         self._drag_origin: QPoint | None = None
         self._win_origin: QPoint | None = None
+        self._drag_start_text_rect: QRect | None = None
+        self._drag_start_bg_offset: QPoint | None = None
+        self._min_text_box_size = 40
+        self._handle_size = 10
+        self._edit_mode = False
+        self._hide_to_tray_on_close = bool(args.tray_icon_enable)
         self._clear_after_ms = max(0, args.subtitle_clear_ms)
         self._clear_timer = QTimer(self)
         self._clear_timer.setSingleShot(True)
         self._clear_timer.timeout.connect(self.clear_subtitle)
         self._bg_pixmap = QPixmap(args.bg_image) if args.bg_image else QPixmap()
+        self._lock_size_to_bg = bool(args.lock_size_to_bg)
+        self._bg_width = max(0, int(args.bg_width))
+        self._bg_height = max(0, int(args.bg_height))
+        self._bg_offset_x = int(args.bg_offset_x)
+        self._bg_offset_y = int(args.bg_offset_y)
+        self._stay_on_top = bool(args.stay_on_top)
         self._font = QFont(args.font_family, args.font_size)
         self._text_anim_enable = bool(args.text_anim_enable)
         self._text_anim_duration_ms = max(0, args.text_anim_duration_ms)
@@ -287,18 +342,134 @@ class SubtitleOverlay(QWidget):
         self.setWindowTitle("Desktop Subtitle")
         overlay_width = max(1, args.width)
         overlay_height = max(1, args.height)
-        if args.lock_size_to_bg and not self._bg_pixmap.isNull():
-            overlay_width = self._bg_pixmap.width()
-            overlay_height = self._bg_pixmap.height()
+        if self._lock_size_to_bg and not self._bg_pixmap.isNull():
+            overlay_width, overlay_height = self._resolved_bg_size()
         self.setGeometry(args.x, args.y, overlay_width, overlay_height)
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.Tool
-        )
+        self._apply_window_flags()
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setWindowOpacity(args.opacity)
+
+    def _apply_window_flags(self) -> None:
+        flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
+        if self._stay_on_top:
+            flags |= Qt.WindowType.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+
+    def is_edit_mode(self) -> bool:
+        return self._edit_mode
+
+    def set_edit_mode(self, enabled: bool) -> None:
+        target = bool(enabled)
+        if self._edit_mode == target:
+            return
+        self._edit_mode = target
+        self.edit_mode_changed.emit(self._edit_mode)
+        self.update()
+
+    def set_stay_on_top(self, enabled: bool) -> None:
+        target = bool(enabled)
+        if self._stay_on_top == target:
+            return
+        self._stay_on_top = target
+        geometry = self.geometry()
+        was_visible = self.isVisible()
+        self._apply_window_flags()
+        self.setGeometry(geometry)
+        if was_visible:
+            self.show()
+        self._emit_settings_changed()
+
+    def set_font_size(self, size: int) -> None:
+        target = max(8, int(size))
+        if self._font.pointSize() == target:
+            return
+        self._font = QFont(self._font.family(), target)
+        self.update()
+        self._emit_settings_changed()
+
+    def set_bg_offset(self, offset_x: int, offset_y: int) -> None:
+        next_x = int(offset_x)
+        next_y = int(offset_y)
+        if self._bg_offset_x == next_x and self._bg_offset_y == next_y:
+            return
+        self._bg_offset_x = next_x
+        self._bg_offset_y = next_y
+        self.update()
+        self._emit_settings_changed()
+
+    def set_bg_size(self, width: int, height: int) -> None:
+        next_w = max(0, int(width))
+        next_h = max(0, int(height))
+        if self._bg_width == next_w and self._bg_height == next_h:
+            return
+        self._bg_width = next_w
+        self._bg_height = next_h
+        if self._lock_size_to_bg and not self._bg_pixmap.isNull():
+            draw_w, draw_h = self._resolved_bg_size()
+            self.resize(draw_w, draw_h)
+        self.update()
+        self._emit_settings_changed()
+
+    def _resolved_bg_size(self) -> tuple[int, int]:
+        if self._bg_pixmap.isNull():
+            return 0, 0
+        draw_w = self._bg_width if self._bg_width > 0 else self._bg_pixmap.width()
+        draw_h = self._bg_height if self._bg_height > 0 else self._bg_pixmap.height()
+        return max(1, draw_w), max(1, draw_h)
+
+    def _ensure_explicit_text_box(self, text_rect: QRect) -> None:
+        if self._text_width > 0 and self._text_height > 0:
+            return
+        self._text_x = text_rect.x()
+        self._text_y = text_rect.y()
+        self._text_width = text_rect.width()
+        self._text_height = text_rect.height()
+
+    def set_text_box(self, x: int, y: int, width: int, height: int) -> None:
+        overlay_width = max(1, self.width())
+        overlay_height = max(1, self.height())
+        safe_w = max(1, min(int(width), overlay_width))
+        safe_h = max(1, min(int(height), overlay_height))
+        safe_x = max(0, min(int(x), overlay_width - safe_w))
+        safe_y = max(0, min(int(y), overlay_height - safe_h))
+
+        if (
+            self._text_x == safe_x
+            and self._text_y == safe_y
+            and self._text_width == safe_w
+            and self._text_height == safe_h
+        ):
+            return
+        self._text_x = safe_x
+        self._text_y = safe_y
+        self._text_width = safe_w
+        self._text_height = safe_h
+        self.update()
+        self._emit_settings_changed()
+
+    def export_runtime_settings(self) -> dict[str, Any]:
+        geometry = self.geometry()
+        text_rect = self._build_text_rect()
+        return {
+            "x": int(geometry.x()),
+            "y": int(geometry.y()),
+            "width": int(geometry.width()),
+            "height": int(geometry.height()),
+            "stay_on_top": bool(self._stay_on_top),
+            "font_size": int(self._font.pointSize()),
+            "text_x": int(text_rect.x()),
+            "text_y": int(text_rect.y()),
+            "text_width": int(text_rect.width()),
+            "text_height": int(text_rect.height()),
+            "bg_width": int(self._bg_width),
+            "bg_height": int(self._bg_height),
+            "bg_offset_x": int(self._bg_offset_x),
+            "bg_offset_y": int(self._bg_offset_y),
+        }
+
+    def _emit_settings_changed(self) -> None:
+        self.settings_changed.emit(self.export_runtime_settings())
 
     def set_subtitle(self, text: str) -> None:
         cleaned = text.strip()
@@ -392,26 +563,22 @@ class SubtitleOverlay(QWidget):
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
         if not self._bg_pixmap.isNull():
-            if self._bg_pixmap.size() == self.size():
-                painter.drawPixmap(self.rect(), self._bg_pixmap)
-            else:
-                x = (self.width() - self._bg_pixmap.width()) // 2
-                y = (self.height() - self._bg_pixmap.height()) // 2
-                painter.drawPixmap(x, y, self._bg_pixmap)
+            bg_rect = self._build_bg_rect()
+            painter.drawPixmap(bg_rect, self._bg_pixmap, self._bg_pixmap.rect())
 
         text_rect = self._build_text_rect()
         max_height = QFontMetrics(self._font).lineSpacing() * self._text_max_lines
         text_rect.setHeight(min(text_rect.height(), max_height))
         draw_text = self._subtitle_text if self._subtitle_text else self._status_text
-        if not draw_text:
-            return
-        draw_rect = self._build_centered_draw_rect(text_rect, draw_text)
+        if draw_text:
+            draw_rect = self._build_centered_draw_rect(text_rect, draw_text)
+            if self._subtitle_text and self._text_anim_enable:
+                self._draw_reveal_text(painter, draw_rect, draw_text)
+            else:
+                self._draw_text(painter, draw_rect, draw_text, self._text_color)
 
-        if self._subtitle_text and self._text_anim_enable:
-            self._draw_reveal_text(painter, draw_rect, draw_text)
-            return
-
-        self._draw_text(painter, draw_rect, draw_text, self._text_color)
+        if self._edit_mode:
+            self._draw_edit_guides(painter, text_rect)
 
     def _build_centered_draw_rect(self, container_rect: QRect, text: str) -> QRect:
         metrics = QFontMetrics(self._font)
@@ -437,6 +604,31 @@ class SubtitleOverlay(QWidget):
             | Qt.TextFlag.TextWordWrap,
             text,
         )
+
+    def _draw_edit_guides(self, painter: QPainter, text_rect: QRect) -> None:
+        painter.save()
+        guide_pen = QPen(QColor(0, 220, 255, 230), 1, Qt.PenStyle.DashLine)
+        painter.setPen(guide_pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(text_rect)
+
+        for handle_rect in self._build_text_handle_rects(text_rect).values():
+            painter.fillRect(handle_rect, QColor(0, 220, 255, 200))
+            painter.drawRect(handle_rect)
+
+        if not self._bg_pixmap.isNull():
+            bg_pen = QPen(QColor(255, 200, 0, 220), 1, Qt.PenStyle.DashLine)
+            painter.setPen(bg_pen)
+            painter.drawRect(self._build_bg_rect())
+
+        painter.setPen(QColor(255, 255, 255, 220))
+        painter.setFont(QFont(self._font.family(), max(9, self._font.pointSize() - 5)))
+        painter.drawText(
+            self.rect().adjusted(8, 6, -8, -6),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+            "编辑模式: 拖拽文本框可移动/缩放, 拖拽背景可调整位置, F2退出",
+        )
+        painter.restore()
 
     def _draw_reveal_text(self, painter: QPainter, text_rect: QRect, text: str) -> None:
         progress = min(1.0, max(0.0, self._text_anim_progress))
@@ -481,6 +673,17 @@ class SubtitleOverlay(QWidget):
         )
         painter.restore()
 
+    def _build_bg_rect(self) -> QRect:
+        if self._bg_pixmap.isNull():
+            return QRect()
+        draw_w, draw_h = self._resolved_bg_size()
+        return QRect(
+            self._bg_offset_x,
+            self._bg_offset_y,
+            draw_w,
+            draw_h,
+        )
+
     def _build_text_rect(self) -> QRect:
         rect = self.rect()
         max_x = max(0, rect.width() - 1)
@@ -500,28 +703,540 @@ class SubtitleOverlay(QWidget):
             max(1, min(text_h, available_h)),
         )
 
+    def _build_text_handle_rects(self, text_rect: QRect) -> dict[str, QRect]:
+        half = self._handle_size // 2
+        cx = text_rect.center().x()
+        cy = text_rect.center().y()
+        left = text_rect.left()
+        right = text_rect.right()
+        top = text_rect.top()
+        bottom = text_rect.bottom()
+        return {
+            "top_left": QRect(left - half, top - half, self._handle_size, self._handle_size),
+            "top": QRect(cx - half, top - half, self._handle_size, self._handle_size),
+            "top_right": QRect(right - half, top - half, self._handle_size, self._handle_size),
+            "right": QRect(right - half, cy - half, self._handle_size, self._handle_size),
+            "bottom_right": QRect(right - half, bottom - half, self._handle_size, self._handle_size),
+            "bottom": QRect(cx - half, bottom - half, self._handle_size, self._handle_size),
+            "bottom_left": QRect(left - half, bottom - half, self._handle_size, self._handle_size),
+            "left": QRect(left - half, cy - half, self._handle_size, self._handle_size),
+        }
+
+    def _hit_test_text_interaction(self, position: QPoint, text_rect: QRect) -> str | None:
+        for name, handle in self._build_text_handle_rects(text_rect).items():
+            if handle.contains(position):
+                return name
+        if text_rect.contains(position):
+            return "move"
+        return None
+
+    def _apply_text_resize_delta(self, handle: str, delta: QPoint) -> None:
+        if self._drag_start_text_rect is None:
+            return
+
+        start = self._drag_start_text_rect
+        left = start.left()
+        right = start.right()
+        top = start.top()
+        bottom = start.bottom()
+        dx = delta.x()
+        dy = delta.y()
+
+        if handle in {"left", "top_left", "bottom_left"}:
+            left += dx
+        if handle in {"right", "top_right", "bottom_right"}:
+            right += dx
+        if handle in {"top", "top_left", "top_right"}:
+            top += dy
+        if handle in {"bottom", "bottom_left", "bottom_right"}:
+            bottom += dy
+
+        overlay_right = max(0, self.width() - 1)
+        overlay_bottom = max(0, self.height() - 1)
+        left = max(0, min(left, overlay_right))
+        right = max(0, min(right, overlay_right))
+        top = max(0, min(top, overlay_bottom))
+        bottom = max(0, min(bottom, overlay_bottom))
+
+        if left > right:
+            left, right = right, left
+        if top > bottom:
+            top, bottom = bottom, top
+
+        min_w = self._min_text_box_size
+        min_h = self._min_text_box_size
+        if right - left + 1 < min_w:
+            if handle in {"right", "top_right", "bottom_right"}:
+                right = min(overlay_right, left + min_w - 1)
+                left = max(0, right - min_w + 1)
+            else:
+                left = max(0, right - min_w + 1)
+                right = min(overlay_right, left + min_w - 1)
+        if bottom - top + 1 < min_h:
+            if handle in {"bottom", "bottom_left", "bottom_right"}:
+                bottom = min(overlay_bottom, top + min_h - 1)
+                top = max(0, bottom - min_h + 1)
+            else:
+                top = max(0, bottom - min_h + 1)
+                bottom = min(overlay_bottom, top + min_h - 1)
+
+        self.set_text_box(left, top, right - left + 1, bottom - top + 1)
+
     def mousePressEvent(self, event) -> None:  # noqa: N802
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_origin = event.globalPosition().toPoint()
-            self._win_origin = self.frameGeometry().topLeft()
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        self._drag_origin = event.globalPosition().toPoint()
+        self._win_origin = self.frameGeometry().topLeft()
+        self._interaction_mode = "move_window"
+        self._drag_start_text_rect = None
+        self._drag_start_bg_offset = None
+
+        if not self._edit_mode:
+            return
+
+        local_pos = event.position().toPoint()
+        text_rect = self._build_text_rect()
+        interaction = self._hit_test_text_interaction(local_pos, text_rect)
+        if interaction is not None:
+            self._ensure_explicit_text_box(text_rect)
+            self._drag_start_text_rect = QRect(
+                self._text_x,
+                self._text_y,
+                max(1, self._text_width),
+                max(1, self._text_height),
+            )
+            self._interaction_mode = f"text_{interaction}"
+            return
+
+        bg_rect = self._build_bg_rect()
+        if not bg_rect.isNull() and bg_rect.contains(local_pos):
+            self._drag_start_bg_offset = QPoint(self._bg_offset_x, self._bg_offset_y)
+            self._interaction_mode = "move_bg"
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
-        if self._drag_origin is None or self._win_origin is None:
+        if (
+            self._drag_origin is None
+            or self._win_origin is None
+            or self._interaction_mode is None
+            or not (event.buttons() & Qt.MouseButton.LeftButton)
+        ):
             return
-        if event.buttons() & Qt.MouseButton.LeftButton:
-            delta = event.globalPosition().toPoint() - self._drag_origin
+        delta = event.globalPosition().toPoint() - self._drag_origin
+        if self._interaction_mode == "move_window":
             self.move(self._win_origin + delta)
+            return
+        if self._interaction_mode == "move_bg":
+            if self._drag_start_bg_offset is None:
+                return
+            self.set_bg_offset(
+                self._drag_start_bg_offset.x() + delta.x(),
+                self._drag_start_bg_offset.y() + delta.y(),
+            )
+            return
+        if self._interaction_mode == "text_move":
+            if self._drag_start_text_rect is None:
+                return
+            start = self._drag_start_text_rect
+            self.set_text_box(
+                start.x() + delta.x(),
+                start.y() + delta.y(),
+                start.width(),
+                start.height(),
+            )
+            return
+        if self._interaction_mode.startswith("text_"):
+            handle = self._interaction_mode.removeprefix("text_")
+            self._apply_text_resize_delta(handle, delta)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         del event
+        if self._interaction_mode == "move_window":
+            self._emit_settings_changed()
         self._drag_origin = None
         self._win_origin = None
+        self._drag_start_text_rect = None
+        self._drag_start_bg_offset = None
+        self._interaction_mode = None
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         if event.key() == Qt.Key.Key_Escape:
-            self.close()
+            if self._hide_to_tray_on_close:
+                self.hide()
+                self._emit_settings_changed()
+            else:
+                self.close()
+            return
+        if event.key() == Qt.Key.Key_F2:
+            self.set_edit_mode(not self._edit_mode)
             return
         super().keyPressEvent(event)
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        if self._hide_to_tray_on_close:
+            event.ignore()
+            self.hide()
+            self._emit_settings_changed()
+            return
+        super().closeEvent(event)
+
+
+class OverlayControlPanel(QWidget):
+    def __init__(self, overlay: SubtitleOverlay, config_path: Path) -> None:
+        super().__init__()
+        self._overlay = overlay
+        self._config_path = config_path
+        self._syncing = False
+        self.setWindowTitle("Subtitle Settings")
+        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
+        self._build_ui()
+        self._connect_signals()
+        self._sync_from_overlay()
+
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(10, 10, 10, 10)
+        root.setSpacing(8)
+
+        tip = QLabel("F2: 编辑模式。拖拽文本框移动/缩放，拖拽背景调位置。")
+        tip.setWordWrap(True)
+        root.addWidget(tip)
+
+        form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+
+        self._stay_on_top_checkbox = QCheckBox("启用")
+        form.addRow("前台常驻", self._stay_on_top_checkbox)
+
+        self._edit_mode_checkbox = QCheckBox("启用")
+        form.addRow("编辑模式", self._edit_mode_checkbox)
+
+        self._font_size_spin = QSpinBox()
+        self._font_size_spin.setRange(8, 120)
+        form.addRow("字号", self._font_size_spin)
+
+        self._text_x_spin = QSpinBox()
+        self._text_x_spin.setRange(0, 5000)
+        form.addRow("文本框 X", self._text_x_spin)
+
+        self._text_y_spin = QSpinBox()
+        self._text_y_spin.setRange(0, 5000)
+        form.addRow("文本框 Y", self._text_y_spin)
+
+        self._text_w_spin = QSpinBox()
+        self._text_w_spin.setRange(1, 5000)
+        form.addRow("文本框宽", self._text_w_spin)
+
+        self._text_h_spin = QSpinBox()
+        self._text_h_spin.setRange(1, 5000)
+        form.addRow("文本框高", self._text_h_spin)
+
+        self._bg_x_spin = QSpinBox()
+        self._bg_x_spin.setRange(-5000, 5000)
+        form.addRow("背景偏移 X", self._bg_x_spin)
+
+        self._bg_y_spin = QSpinBox()
+        self._bg_y_spin.setRange(-5000, 5000)
+        form.addRow("背景偏移 Y", self._bg_y_spin)
+
+        self._bg_w_spin = QSpinBox()
+        self._bg_w_spin.setRange(0, 5000)
+        self._bg_w_spin.setSpecialValueText("自动")
+        form.addRow("背景宽", self._bg_w_spin)
+
+        self._bg_h_spin = QSpinBox()
+        self._bg_h_spin.setRange(0, 5000)
+        self._bg_h_spin.setSpecialValueText("自动")
+        form.addRow("背景高", self._bg_h_spin)
+
+        root.addLayout(form)
+        root.addWidget(self._divider())
+
+        action_row = QHBoxLayout()
+        self._save_button = QPushButton("保存到配置")
+        action_row.addWidget(self._save_button)
+        root.addLayout(action_row)
+
+        self._status_label = QLabel("")
+        root.addWidget(self._status_label)
+
+    def _connect_signals(self) -> None:
+        self._overlay.settings_changed.connect(self._sync_from_overlay)
+        self._overlay.edit_mode_changed.connect(self._on_overlay_edit_mode_changed)
+
+        self._stay_on_top_checkbox.toggled.connect(self._on_stay_on_top_changed)
+        self._edit_mode_checkbox.toggled.connect(self._on_edit_mode_changed)
+        self._font_size_spin.valueChanged.connect(self._on_font_size_changed)
+        self._text_x_spin.valueChanged.connect(self._on_text_box_changed)
+        self._text_y_spin.valueChanged.connect(self._on_text_box_changed)
+        self._text_w_spin.valueChanged.connect(self._on_text_box_changed)
+        self._text_h_spin.valueChanged.connect(self._on_text_box_changed)
+        self._bg_x_spin.valueChanged.connect(self._on_bg_offset_changed)
+        self._bg_y_spin.valueChanged.connect(self._on_bg_offset_changed)
+        self._bg_w_spin.valueChanged.connect(self._on_bg_size_changed)
+        self._bg_h_spin.valueChanged.connect(self._on_bg_size_changed)
+        self._save_button.clicked.connect(self._save_to_config)
+
+    def _divider(self) -> QFrame:
+        frame = QFrame()
+        frame.setFrameShape(QFrame.Shape.HLine)
+        frame.setFrameShadow(QFrame.Shadow.Sunken)
+        return frame
+
+    def _sync_from_overlay(self, settings: dict[str, Any] | None = None) -> None:
+        del settings
+        snapshot = self._overlay.export_runtime_settings()
+        self._syncing = True
+        try:
+            self._stay_on_top_checkbox.setChecked(bool(snapshot["stay_on_top"]))
+            self._edit_mode_checkbox.setChecked(self._overlay.is_edit_mode())
+            self._font_size_spin.setValue(int(snapshot["font_size"]))
+            self._text_x_spin.setValue(int(snapshot["text_x"]))
+            self._text_y_spin.setValue(int(snapshot["text_y"]))
+            self._text_w_spin.setValue(int(snapshot["text_width"]))
+            self._text_h_spin.setValue(int(snapshot["text_height"]))
+            self._bg_x_spin.setValue(int(snapshot["bg_offset_x"]))
+            self._bg_y_spin.setValue(int(snapshot["bg_offset_y"]))
+            self._bg_w_spin.setValue(int(snapshot["bg_width"]))
+            self._bg_h_spin.setValue(int(snapshot["bg_height"]))
+        finally:
+            self._syncing = False
+
+    def _on_overlay_edit_mode_changed(self, enabled: bool) -> None:
+        if self._syncing:
+            return
+        self._syncing = True
+        try:
+            self._edit_mode_checkbox.setChecked(enabled)
+        finally:
+            self._syncing = False
+
+    def _on_stay_on_top_changed(self, checked: bool) -> None:
+        if self._syncing:
+            return
+        self._overlay.set_stay_on_top(checked)
+
+    def _on_edit_mode_changed(self, checked: bool) -> None:
+        if self._syncing:
+            return
+        self._overlay.set_edit_mode(checked)
+
+    def _on_font_size_changed(self, value: int) -> None:
+        if self._syncing:
+            return
+        self._overlay.set_font_size(value)
+
+    def _on_text_box_changed(self, _value: int) -> None:
+        if self._syncing:
+            return
+        self._overlay.set_text_box(
+            self._text_x_spin.value(),
+            self._text_y_spin.value(),
+            self._text_w_spin.value(),
+            self._text_h_spin.value(),
+        )
+
+    def _on_bg_offset_changed(self, _value: int) -> None:
+        if self._syncing:
+            return
+        self._overlay.set_bg_offset(self._bg_x_spin.value(), self._bg_y_spin.value())
+
+    def _on_bg_size_changed(self, _value: int) -> None:
+        if self._syncing:
+            return
+        self._overlay.set_bg_size(self._bg_w_spin.value(), self._bg_h_spin.value())
+
+    def _save_to_config(self) -> None:
+        try:
+            write_overlay_settings_to_config(
+                self._config_path,
+                self._overlay.export_runtime_settings(),
+            )
+            self._status_label.setText(f"已保存: {self._config_path}")
+        except Exception as exc:  # pylint: disable=broad-except
+            self._status_label.setText(f"保存失败: {exc}")
+
+
+def build_tray_icon(image_path: str) -> QIcon:
+    if image_path:
+        pix = QPixmap(image_path)
+        if not pix.isNull():
+            scaled = pix.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            canvas = QPixmap(32, 32)
+            canvas.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(canvas)
+            x = (32 - scaled.width()) // 2
+            y = (32 - scaled.height()) // 2
+            painter.drawPixmap(x, y, scaled)
+            painter.end()
+            return QIcon(canvas)
+
+    fallback = QPixmap(32, 32)
+    fallback.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(fallback)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setBrush(QColor(24, 120, 255))
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.drawRoundedRect(2, 2, 28, 28, 8, 8)
+    painter.setPen(QColor(255, 255, 255))
+    painter.setFont(QFont("Microsoft YaHei", 9, QFont.Weight.Bold))
+    painter.drawText(fallback.rect(), Qt.AlignmentFlag.AlignCenter, "ASR")
+    painter.end()
+    return QIcon(fallback)
+
+
+class TrayController(QObject):
+    def __init__(
+        self,
+        app: QApplication,
+        overlay: SubtitleOverlay,
+        control_panel: OverlayControlPanel,
+        config_path: Path,
+        icon_path: str,
+    ) -> None:
+        super().__init__()
+        self._app = app
+        self._overlay = overlay
+        self._control_panel = control_panel
+        self._config_path = config_path
+        self._syncing = False
+
+        self._tray = QSystemTrayIcon(build_tray_icon(icon_path), self._app)
+        self._tray.setToolTip("Desktop Subtitle")
+        self._menu = QMenu()
+        self._build_menu()
+        self._tray.setContextMenu(self._menu)
+        self._tray.activated.connect(self._on_tray_activated)
+
+        self._overlay.settings_changed.connect(self._sync_states)
+        self._overlay.edit_mode_changed.connect(self._sync_edit_mode_action)
+        self._sync_states()
+
+    def _build_menu(self) -> None:
+        self._action_show_overlay = QAction("显示字幕窗口", self._menu)
+        self._action_show_overlay.setCheckable(True)
+        self._action_show_overlay.toggled.connect(self._on_toggle_overlay)
+        self._menu.addAction(self._action_show_overlay)
+
+        self._action_show_settings = QAction("打开设置面板", self._menu)
+        self._action_show_settings.setCheckable(True)
+        self._action_show_settings.toggled.connect(self._on_toggle_settings)
+        self._menu.addAction(self._action_show_settings)
+
+        self._menu.addSeparator()
+
+        self._action_edit_mode = QAction("编辑模式 (F2)", self._menu)
+        self._action_edit_mode.setCheckable(True)
+        self._action_edit_mode.toggled.connect(self._on_toggle_edit_mode)
+        self._menu.addAction(self._action_edit_mode)
+
+        self._action_stay_on_top = QAction("前台常驻", self._menu)
+        self._action_stay_on_top.setCheckable(True)
+        self._action_stay_on_top.toggled.connect(self._on_toggle_stay_on_top)
+        self._menu.addAction(self._action_stay_on_top)
+
+        self._menu.addSeparator()
+
+        self._action_save = QAction("保存当前设置", self._menu)
+        self._action_save.triggered.connect(self._on_save_settings)
+        self._menu.addAction(self._action_save)
+
+        self._action_quit = QAction("退出", self._menu)
+        self._action_quit.triggered.connect(self._on_quit)
+        self._menu.addAction(self._action_quit)
+
+    def show(self) -> None:
+        self._tray.show()
+
+    def hide(self) -> None:
+        self._tray.hide()
+
+    def _sync_states(self, _settings: dict[str, Any] | None = None) -> None:
+        del _settings
+        snapshot = self._overlay.export_runtime_settings()
+        self._syncing = True
+        try:
+            self._action_show_overlay.setChecked(self._overlay.isVisible())
+            self._action_show_settings.setChecked(self._control_panel.isVisible())
+            self._action_edit_mode.setChecked(self._overlay.is_edit_mode())
+            self._action_stay_on_top.setChecked(bool(snapshot["stay_on_top"]))
+        finally:
+            self._syncing = False
+
+    def _sync_edit_mode_action(self, enabled: bool) -> None:
+        if self._syncing:
+            return
+        self._syncing = True
+        try:
+            self._action_edit_mode.setChecked(enabled)
+        finally:
+            self._syncing = False
+
+    def _on_toggle_overlay(self, checked: bool) -> None:
+        if self._syncing:
+            return
+        if checked:
+            self._overlay.show()
+            self._overlay.raise_()
+            self._overlay.activateWindow()
+        else:
+            self._overlay.hide()
+
+    def _on_toggle_settings(self, checked: bool) -> None:
+        if self._syncing:
+            return
+        if checked:
+            if not self._overlay.isVisible():
+                self._overlay.show()
+            self._control_panel.move(self._overlay.x() + self._overlay.width() + 16, self._overlay.y())
+            self._control_panel.show()
+            self._control_panel.raise_()
+            self._control_panel.activateWindow()
+        else:
+            self._control_panel.hide()
+
+    def _on_toggle_edit_mode(self, checked: bool) -> None:
+        if self._syncing:
+            return
+        self._overlay.set_edit_mode(checked)
+
+    def _on_toggle_stay_on_top(self, checked: bool) -> None:
+        if self._syncing:
+            return
+        self._overlay.set_stay_on_top(checked)
+
+    def _on_save_settings(self) -> None:
+        try:
+            write_overlay_settings_to_config(
+                self._config_path,
+                self._overlay.export_runtime_settings(),
+            )
+            self._tray.showMessage(
+                "Desktop Subtitle",
+                f"设置已保存到 {self._config_path}",
+                QSystemTrayIcon.MessageIcon.Information,
+                1800,
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            self._tray.showMessage(
+                "Desktop Subtitle",
+                f"保存失败: {exc}",
+                QSystemTrayIcon.MessageIcon.Critical,
+                2800,
+            )
+
+    def _on_quit(self) -> None:
+        self._app.quit()
+
+    def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            next_visible = not self._overlay.isVisible()
+            if next_visible:
+                self._overlay.show()
+                self._overlay.raise_()
+                self._overlay.activateWindow()
+            else:
+                self._overlay.hide()
+            self._sync_states()
 
 
 class ASRWorker(threading.Thread):
@@ -808,6 +1523,10 @@ def parse_args() -> argparse.Namespace:
         help="allow custom width/height even with background image",
     )
     parser.set_defaults(lock_size_to_bg=defaults["lock_size_to_bg"])
+    top_group = parser.add_mutually_exclusive_group()
+    top_group.add_argument("--stay-on-top", dest="stay_on_top", action="store_true")
+    top_group.add_argument("--no-stay-on-top", dest="stay_on_top", action="store_false")
+    parser.set_defaults(stay_on_top=defaults["stay_on_top"])
     parser.add_argument("--opacity", type=float, default=defaults["opacity"])
     parser.add_argument("--font-family", type=str, default=defaults["font_family"])
     parser.add_argument("--font-size", type=int, default=defaults["font_size"])
@@ -846,6 +1565,34 @@ def parse_args() -> argparse.Namespace:
         help="clear subtitle after this idle duration in milliseconds; 0 disables auto-clear",
     )
     parser.add_argument("--bg-image", type=str, default=defaults["bg_image"])
+    parser.add_argument("--bg-width", type=int, default=defaults["bg_width"])
+    parser.add_argument("--bg-height", type=int, default=defaults["bg_height"])
+    parser.add_argument("--bg-offset-x", type=int, default=defaults["bg_offset_x"])
+    parser.add_argument("--bg-offset-y", type=int, default=defaults["bg_offset_y"])
+    panel_group = parser.add_mutually_exclusive_group()
+    panel_group.add_argument(
+        "--show-control-panel",
+        dest="show_control_panel",
+        action="store_true",
+    )
+    panel_group.add_argument(
+        "--hide-control-panel",
+        dest="show_control_panel",
+        action="store_false",
+    )
+    parser.set_defaults(show_control_panel=defaults["show_control_panel"])
+    tray_group = parser.add_mutually_exclusive_group()
+    tray_group.add_argument(
+        "--enable-tray-icon",
+        dest="tray_icon_enable",
+        action="store_true",
+    )
+    tray_group.add_argument(
+        "--disable-tray-icon",
+        dest="tray_icon_enable",
+        action="store_false",
+    )
+    parser.set_defaults(tray_icon_enable=defaults["tray_icon_enable"])
 
     parser.add_argument("--device", type=int, default=defaults["device"])
     parser.add_argument("--samplerate", type=int, default=defaults["samplerate"])
@@ -955,6 +1702,45 @@ def ensure_valid_image(path: str, config_path: Path) -> str:
     return ""
 
 
+def write_overlay_settings_to_config(config_path: Path, settings: dict[str, Any]) -> None:
+    config_path = config_path.expanduser().resolve()
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    current: dict[str, Any] = {}
+    if config_path.exists():
+        with config_path.open("r", encoding="utf-8") as file:
+            loaded = yaml.safe_load(file)
+        if loaded is None:
+            current = {}
+        elif isinstance(loaded, dict):
+            current = loaded
+        else:
+            raise ValueError("Config file must be a YAML mapping object.")
+
+    save_keys = {
+        "x",
+        "y",
+        "width",
+        "height",
+        "stay_on_top",
+        "font_size",
+        "text_x",
+        "text_y",
+        "text_width",
+        "text_height",
+        "bg_width",
+        "bg_height",
+        "bg_offset_x",
+        "bg_offset_y",
+    }
+    for key in save_keys:
+        if key in settings:
+            current[key] = settings[key]
+
+    with config_path.open("w", encoding="utf-8") as file:
+        yaml.safe_dump(current, file, sort_keys=False, allow_unicode=True)
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -973,7 +1759,25 @@ def main() -> int:
     LOGGER.info("Subtitle auto-clear: %dms", args.subtitle_clear_ms)
 
     app = QApplication(sys.argv)
+    tray_available = QSystemTrayIcon.isSystemTrayAvailable()
+    if args.tray_icon_enable and tray_available:
+        app.setQuitOnLastWindowClosed(False)
+
     overlay = SubtitleOverlay(args)
+    control_panel = OverlayControlPanel(overlay, config_path)
+    tray_controller = None
+    if args.tray_icon_enable:
+        if tray_available:
+            tray_controller = TrayController(
+                app=app,
+                overlay=overlay,
+                control_panel=control_panel,
+                config_path=config_path,
+                icon_path=args.bg_image,
+            )
+        else:
+            LOGGER.warning("System tray is unavailable on this platform; tray icon disabled.")
+
     signals = AppSignals()
     stop_event = threading.Event()
     audio_queue: "queue.Queue[np.ndarray]" = queue.Queue(maxsize=args.queue_size)
@@ -1008,6 +1812,11 @@ def main() -> int:
         stream.start()
         LOGGER.info("Audio input stream started (samplerate=%d, block_ms=%d)", args.samplerate, args.block_ms)
         overlay.show()
+        if tray_controller is not None:
+            tray_controller.show()
+        if args.show_control_panel:
+            control_panel.move(overlay.x() + overlay.width() + 16, overlay.y())
+            control_panel.show()
         LOGGER.info("Overlay window shown")
         code = app.exec()
     except Exception as exc:  # pylint: disable=broad-except
@@ -1023,6 +1832,8 @@ def main() -> int:
                 stream.close()
             except Exception:
                 pass
+        if tray_controller is not None:
+            tray_controller.hide()
         worker.join(timeout=2.0)
         LOGGER.info("Worker stopped")
 
