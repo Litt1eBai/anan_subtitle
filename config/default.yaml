@@ -8,6 +8,8 @@ width: 900
 height: 180
 # Use background image native width/height as overlay size (1:1 pixels).
 lock_size_to_bg: true
+# Use frameless + transparent window mode (non-tool window).
+windowed_mode: false
 # Keep overlay always on top.
 stay_on_top: true
 

@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QSystemTrayIcon,
     QVBoxLayout,
@@ -42,12 +43,30 @@ from funasr import AutoModel
 
 DEFAULT_CONFIG_PATH = "config/app.yaml"
 LOGGER = logging.getLogger("desktop_subtitle")
+OVERLAY_PERSIST_KEYS = {
+    "x",
+    "y",
+    "width",
+    "height",
+    "windowed_mode",
+    "stay_on_top",
+    "font_size",
+    "text_x",
+    "text_y",
+    "text_width",
+    "text_height",
+    "bg_width",
+    "bg_height",
+    "bg_offset_x",
+    "bg_offset_y",
+}
 DEFAULT_CONFIG: dict[str, Any] = {
     "x": 80,
     "y": 80,
     "width": 900,
     "height": 180,
     "lock_size_to_bg": True,
+    "windowed_mode": False,
     "stay_on_top": True,
     "opacity": 1.0,
     "font_family": "Microsoft YaHei",
@@ -146,28 +165,7 @@ def merge_incremental_text(current: str, new_text: str) -> str:
 def replace_sentence_initial_wo(text: str) -> str:
     if not text:
         return ""
-
-    sentence_endings = {"。", "！", "？", "!", "?", ";", "；", "\n"}
-    chars = list(text)
-    result: list[str] = []
-    at_sentence_start = True
-
-    for ch in chars:
-        if at_sentence_start and ch.isspace():
-            result.append(ch)
-            continue
-        if at_sentence_start and ch == "我":
-            result.append("吾辈")
-            at_sentence_start = False
-            continue
-
-        result.append(ch)
-        if ch in sentence_endings:
-            at_sentence_start = True
-        elif not ch.isspace():
-            at_sentence_start = False
-
-    return "".join(result)
+    return text.replace("我", "吾辈")
 
 
 def parse_chunk_size(chunk_size: Any) -> list[int]:
@@ -222,6 +220,7 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     float_fields = {"opacity", "energy_threshold", "max_segment_seconds"}
     bool_fields = {
         "lock_size_to_bg",
+        "windowed_mode",
         "stay_on_top",
         "show_control_panel",
         "tray_icon_enable",
@@ -294,6 +293,7 @@ class AppSignals(QObject):
 class SubtitleOverlay(QWidget):
     settings_changed = Signal(dict)
     edit_mode_changed = Signal(bool)
+    visibility_changed = Signal(bool)
 
     def __init__(self, args: argparse.Namespace) -> None:
         super().__init__()
@@ -318,6 +318,7 @@ class SubtitleOverlay(QWidget):
         self._bg_height = max(0, int(args.bg_height))
         self._bg_offset_x = int(args.bg_offset_x)
         self._bg_offset_y = int(args.bg_offset_y)
+        self._windowed_mode = bool(args.windowed_mode)
         self._stay_on_top = bool(args.stay_on_top)
         self._font = QFont(args.font_family, args.font_size)
         self._text_anim_enable = bool(args.text_anim_enable)
@@ -346,18 +347,24 @@ class SubtitleOverlay(QWidget):
             overlay_width, overlay_height = self._resolved_bg_size()
         self.setGeometry(args.x, args.y, overlay_width, overlay_height)
         self._apply_window_flags()
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setWindowOpacity(args.opacity)
 
     def _apply_window_flags(self) -> None:
-        flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
+        if self._windowed_mode:
+            flags = Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
+        else:
+            flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
         if self._stay_on_top:
             flags |= Qt.WindowType.WindowStaysOnTopHint
         self.setWindowFlags(flags)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
     def is_edit_mode(self) -> bool:
         return self._edit_mode
+
+    def is_windowed_mode(self) -> bool:
+        return self._windowed_mode
 
     def set_edit_mode(self, enabled: bool) -> None:
         target = bool(enabled)
@@ -378,6 +385,20 @@ class SubtitleOverlay(QWidget):
         self.setGeometry(geometry)
         if was_visible:
             self.show()
+        self._emit_settings_changed()
+
+    def set_windowed_mode(self, enabled: bool) -> None:
+        target = bool(enabled)
+        if self._windowed_mode == target:
+            return
+        self._windowed_mode = target
+        geometry = self.geometry()
+        was_visible = self.isVisible()
+        self._apply_window_flags()
+        self.setGeometry(geometry)
+        if was_visible:
+            self.show()
+        self.update()
         self._emit_settings_changed()
 
     def set_font_size(self, size: int) -> None:
@@ -456,6 +477,7 @@ class SubtitleOverlay(QWidget):
             "y": int(geometry.y()),
             "width": int(geometry.width()),
             "height": int(geometry.height()),
+            "windowed_mode": bool(self._windowed_mode),
             "stay_on_top": bool(self._stay_on_top),
             "font_size": int(self._font.pointSize()),
             "text_x": int(text_rect.x()),
@@ -879,8 +901,18 @@ class SubtitleOverlay(QWidget):
             return
         super().closeEvent(event)
 
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        self.visibility_changed.emit(True)
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        super().hideEvent(event)
+        self.visibility_changed.emit(False)
+
 
 class OverlayControlPanel(QWidget):
+    visibility_changed = Signal(bool)
+
     def __init__(self, overlay: SubtitleOverlay, config_path: Path) -> None:
         super().__init__()
         self._overlay = overlay
@@ -896,59 +928,87 @@ class OverlayControlPanel(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(8)
+        self.setMinimumWidth(360)
+        self.resize(400, 560)
 
         tip = QLabel("F2: 编辑模式。拖拽文本框移动/缩放，拖拽背景调位置。")
         tip.setWordWrap(True)
         root.addWidget(tip)
 
-        form = QFormLayout()
-        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        root.addWidget(scroll, 1)
+
+        form_host = QWidget()
+        scroll.setWidget(form_host)
+        host_layout = QVBoxLayout(form_host)
+        host_layout.setContentsMargins(0, 0, 0, 0)
+        host_layout.setSpacing(10)
+
+        host_layout.addWidget(self._section_title("窗口"))
+        window_form = QFormLayout()
+        window_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
 
         self._stay_on_top_checkbox = QCheckBox("启用")
-        form.addRow("前台常驻", self._stay_on_top_checkbox)
-
+        window_form.addRow("前台常驻", self._stay_on_top_checkbox)
+        self._windowed_mode_checkbox = QCheckBox("启用")
+        self._windowed_mode_checkbox.setToolTip("启用后仍为无边框透明背景，仅切换为非 Tool 窗口。")
+        window_form.addRow("窗口化模式", self._windowed_mode_checkbox)
         self._edit_mode_checkbox = QCheckBox("启用")
-        form.addRow("编辑模式", self._edit_mode_checkbox)
+        window_form.addRow("编辑模式", self._edit_mode_checkbox)
+        host_layout.addLayout(window_form)
 
+        host_layout.addWidget(self._section_title("字幕"))
+        text_form = QFormLayout()
+        text_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self._font_size_spin = QSpinBox()
         self._font_size_spin.setRange(8, 120)
-        form.addRow("字号", self._font_size_spin)
+        text_form.addRow("字号", self._font_size_spin)
 
         self._text_x_spin = QSpinBox()
         self._text_x_spin.setRange(0, 5000)
-        form.addRow("文本框 X", self._text_x_spin)
+        text_form.addRow("文本框 X", self._text_x_spin)
 
         self._text_y_spin = QSpinBox()
         self._text_y_spin.setRange(0, 5000)
-        form.addRow("文本框 Y", self._text_y_spin)
+        text_form.addRow("文本框 Y", self._text_y_spin)
 
         self._text_w_spin = QSpinBox()
         self._text_w_spin.setRange(1, 5000)
-        form.addRow("文本框宽", self._text_w_spin)
+        text_form.addRow("文本框宽", self._text_w_spin)
 
         self._text_h_spin = QSpinBox()
         self._text_h_spin.setRange(1, 5000)
-        form.addRow("文本框高", self._text_h_spin)
+        text_form.addRow("文本框高", self._text_h_spin)
+        host_layout.addLayout(text_form)
 
+        host_layout.addWidget(self._section_title("背景"))
+        bg_form = QFormLayout()
+        bg_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self._bg_x_spin = QSpinBox()
         self._bg_x_spin.setRange(-5000, 5000)
-        form.addRow("背景偏移 X", self._bg_x_spin)
+        bg_form.addRow("背景偏移 X", self._bg_x_spin)
 
         self._bg_y_spin = QSpinBox()
         self._bg_y_spin.setRange(-5000, 5000)
-        form.addRow("背景偏移 Y", self._bg_y_spin)
+        bg_form.addRow("背景偏移 Y", self._bg_y_spin)
 
         self._bg_w_spin = QSpinBox()
         self._bg_w_spin.setRange(0, 5000)
         self._bg_w_spin.setSpecialValueText("自动")
-        form.addRow("背景宽", self._bg_w_spin)
+        self._bg_w_spin.setToolTip("0 表示使用原图宽度")
+        bg_form.addRow("背景宽", self._bg_w_spin)
 
         self._bg_h_spin = QSpinBox()
         self._bg_h_spin.setRange(0, 5000)
         self._bg_h_spin.setSpecialValueText("自动")
-        form.addRow("背景高", self._bg_h_spin)
-
-        root.addLayout(form)
+        self._bg_h_spin.setToolTip("0 表示使用原图高度")
+        bg_form.addRow("背景高", self._bg_h_spin)
+        host_layout.addLayout(bg_form)
+        bg_hint = QLabel("提示：背景宽/高填 0 时，使用背景图片原始尺寸。")
+        bg_hint.setWordWrap(True)
+        host_layout.addWidget(bg_hint)
+        host_layout.addStretch(1)
         root.addWidget(self._divider())
 
         action_row = QHBoxLayout()
@@ -964,6 +1024,7 @@ class OverlayControlPanel(QWidget):
         self._overlay.edit_mode_changed.connect(self._on_overlay_edit_mode_changed)
 
         self._stay_on_top_checkbox.toggled.connect(self._on_stay_on_top_changed)
+        self._windowed_mode_checkbox.toggled.connect(self._on_windowed_mode_changed)
         self._edit_mode_checkbox.toggled.connect(self._on_edit_mode_changed)
         self._font_size_spin.valueChanged.connect(self._on_font_size_changed)
         self._text_x_spin.valueChanged.connect(self._on_text_box_changed)
@@ -982,12 +1043,20 @@ class OverlayControlPanel(QWidget):
         frame.setFrameShadow(QFrame.Shadow.Sunken)
         return frame
 
+    def _section_title(self, text: str) -> QLabel:
+        label = QLabel(text)
+        font = QFont(label.font())
+        font.setBold(True)
+        label.setFont(font)
+        return label
+
     def _sync_from_overlay(self, settings: dict[str, Any] | None = None) -> None:
         del settings
         snapshot = self._overlay.export_runtime_settings()
         self._syncing = True
         try:
             self._stay_on_top_checkbox.setChecked(bool(snapshot["stay_on_top"]))
+            self._windowed_mode_checkbox.setChecked(bool(snapshot["windowed_mode"]))
             self._edit_mode_checkbox.setChecked(self._overlay.is_edit_mode())
             self._font_size_spin.setValue(int(snapshot["font_size"]))
             self._text_x_spin.setValue(int(snapshot["text_x"]))
@@ -1014,6 +1083,11 @@ class OverlayControlPanel(QWidget):
         if self._syncing:
             return
         self._overlay.set_stay_on_top(checked)
+
+    def _on_windowed_mode_changed(self, checked: bool) -> None:
+        if self._syncing:
+            return
+        self._overlay.set_windowed_mode(checked)
 
     def _on_edit_mode_changed(self, checked: bool) -> None:
         if self._syncing:
@@ -1047,13 +1121,18 @@ class OverlayControlPanel(QWidget):
 
     def _save_to_config(self) -> None:
         try:
-            write_overlay_settings_to_config(
-                self._config_path,
-                self._overlay.export_runtime_settings(),
-            )
+            persist_overlay_settings(self._config_path, self._overlay)
             self._status_label.setText(f"已保存: {self._config_path}")
         except Exception as exc:  # pylint: disable=broad-except
             self._status_label.setText(f"保存失败: {exc}")
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        self.visibility_changed.emit(True)
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        super().hideEvent(event)
+        self.visibility_changed.emit(False)
 
 
 def build_tray_icon(image_path: str) -> QIcon:
@@ -1098,7 +1177,6 @@ class TrayController(QObject):
         self._overlay = overlay
         self._control_panel = control_panel
         self._config_path = config_path
-        self._syncing = False
 
         self._tray = QSystemTrayIcon(build_tray_icon(icon_path), self._app)
         self._tray.setToolTip("Desktop Subtitle")
@@ -1107,32 +1185,18 @@ class TrayController(QObject):
         self._tray.setContextMenu(self._menu)
         self._tray.activated.connect(self._on_tray_activated)
 
-        self._overlay.settings_changed.connect(self._sync_states)
-        self._overlay.edit_mode_changed.connect(self._sync_edit_mode_action)
+        self._overlay.visibility_changed.connect(self._sync_states)
+        self._control_panel.visibility_changed.connect(self._sync_states)
         self._sync_states()
 
     def _build_menu(self) -> None:
-        self._action_show_overlay = QAction("显示字幕窗口", self._menu)
-        self._action_show_overlay.setCheckable(True)
-        self._action_show_overlay.toggled.connect(self._on_toggle_overlay)
-        self._menu.addAction(self._action_show_overlay)
+        self._action_toggle_overlay = QAction("", self._menu)
+        self._action_toggle_overlay.triggered.connect(self._on_toggle_overlay)
+        self._menu.addAction(self._action_toggle_overlay)
 
-        self._action_show_settings = QAction("打开设置面板", self._menu)
-        self._action_show_settings.setCheckable(True)
-        self._action_show_settings.toggled.connect(self._on_toggle_settings)
-        self._menu.addAction(self._action_show_settings)
-
-        self._menu.addSeparator()
-
-        self._action_edit_mode = QAction("编辑模式 (F2)", self._menu)
-        self._action_edit_mode.setCheckable(True)
-        self._action_edit_mode.toggled.connect(self._on_toggle_edit_mode)
-        self._menu.addAction(self._action_edit_mode)
-
-        self._action_stay_on_top = QAction("前台常驻", self._menu)
-        self._action_stay_on_top.setCheckable(True)
-        self._action_stay_on_top.toggled.connect(self._on_toggle_stay_on_top)
-        self._menu.addAction(self._action_stay_on_top)
+        self._action_open_settings = QAction("", self._menu)
+        self._action_open_settings.triggered.connect(self._on_open_settings)
+        self._menu.addAction(self._action_open_settings)
 
         self._menu.addSeparator()
 
@@ -1150,66 +1214,34 @@ class TrayController(QObject):
     def hide(self) -> None:
         self._tray.hide()
 
-    def _sync_states(self, _settings: dict[str, Any] | None = None) -> None:
-        del _settings
-        snapshot = self._overlay.export_runtime_settings()
-        self._syncing = True
-        try:
-            self._action_show_overlay.setChecked(self._overlay.isVisible())
-            self._action_show_settings.setChecked(self._control_panel.isVisible())
-            self._action_edit_mode.setChecked(self._overlay.is_edit_mode())
-            self._action_stay_on_top.setChecked(bool(snapshot["stay_on_top"]))
-        finally:
-            self._syncing = False
+    def _sync_states(self, _payload: Any = None) -> None:
+        del _payload
+        overlay_visible = self._overlay.isVisible()
+        panel_visible = self._control_panel.isVisible()
+        self._action_toggle_overlay.setText("隐藏字幕窗口" if overlay_visible else "显示字幕窗口")
+        self._action_open_settings.setText("聚焦设置面板" if panel_visible else "打开设置面板")
 
-    def _sync_edit_mode_action(self, enabled: bool) -> None:
-        if self._syncing:
-            return
-        self._syncing = True
-        try:
-            self._action_edit_mode.setChecked(enabled)
-        finally:
-            self._syncing = False
-
-    def _on_toggle_overlay(self, checked: bool) -> None:
-        if self._syncing:
-            return
-        if checked:
+    def _on_toggle_overlay(self) -> None:
+        if self._overlay.isVisible():
+            self._overlay.hide()
+        else:
             self._overlay.show()
             self._overlay.raise_()
             self._overlay.activateWindow()
-        else:
-            self._overlay.hide()
+        self._sync_states()
 
-    def _on_toggle_settings(self, checked: bool) -> None:
-        if self._syncing:
-            return
-        if checked:
-            if not self._overlay.isVisible():
-                self._overlay.show()
-            self._control_panel.move(self._overlay.x() + self._overlay.width() + 16, self._overlay.y())
-            self._control_panel.show()
-            self._control_panel.raise_()
-            self._control_panel.activateWindow()
-        else:
-            self._control_panel.hide()
-
-    def _on_toggle_edit_mode(self, checked: bool) -> None:
-        if self._syncing:
-            return
-        self._overlay.set_edit_mode(checked)
-
-    def _on_toggle_stay_on_top(self, checked: bool) -> None:
-        if self._syncing:
-            return
-        self._overlay.set_stay_on_top(checked)
+    def _on_open_settings(self) -> None:
+        if not self._overlay.isVisible():
+            self._overlay.show()
+        self._control_panel.move(self._overlay.x() + self._overlay.width() + 16, self._overlay.y())
+        self._control_panel.show()
+        self._control_panel.raise_()
+        self._control_panel.activateWindow()
+        self._sync_states()
 
     def _on_save_settings(self) -> None:
         try:
-            write_overlay_settings_to_config(
-                self._config_path,
-                self._overlay.export_runtime_settings(),
-            )
+            persist_overlay_settings(self._config_path, self._overlay)
             self._tray.showMessage(
                 "Desktop Subtitle",
                 f"设置已保存到 {self._config_path}",
@@ -1229,14 +1261,7 @@ class TrayController(QObject):
 
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
-            next_visible = not self._overlay.isVisible()
-            if next_visible:
-                self._overlay.show()
-                self._overlay.raise_()
-                self._overlay.activateWindow()
-            else:
-                self._overlay.hide()
-            self._sync_states()
+            self._on_toggle_overlay()
 
 
 class ASRWorker(threading.Thread):
@@ -1523,6 +1548,20 @@ def parse_args() -> argparse.Namespace:
         help="allow custom width/height even with background image",
     )
     parser.set_defaults(lock_size_to_bg=defaults["lock_size_to_bg"])
+    window_group = parser.add_mutually_exclusive_group()
+    window_group.add_argument(
+        "--windowed",
+        dest="windowed_mode",
+        action="store_true",
+        help="use frameless transparent window mode (non-tool window)",
+    )
+    window_group.add_argument(
+        "--frameless",
+        dest="windowed_mode",
+        action="store_false",
+        help="use frameless overlay mode",
+    )
+    parser.set_defaults(windowed_mode=defaults["windowed_mode"])
     top_group = parser.add_mutually_exclusive_group()
     top_group.add_argument("--stay-on-top", dest="stay_on_top", action="store_true")
     top_group.add_argument("--no-stay-on-top", dest="stay_on_top", action="store_false")
@@ -1717,28 +1756,16 @@ def write_overlay_settings_to_config(config_path: Path, settings: dict[str, Any]
         else:
             raise ValueError("Config file must be a YAML mapping object.")
 
-    save_keys = {
-        "x",
-        "y",
-        "width",
-        "height",
-        "stay_on_top",
-        "font_size",
-        "text_x",
-        "text_y",
-        "text_width",
-        "text_height",
-        "bg_width",
-        "bg_height",
-        "bg_offset_x",
-        "bg_offset_y",
-    }
-    for key in save_keys:
+    for key in OVERLAY_PERSIST_KEYS:
         if key in settings:
             current[key] = settings[key]
 
     with config_path.open("w", encoding="utf-8") as file:
         yaml.safe_dump(current, file, sort_keys=False, allow_unicode=True)
+
+
+def persist_overlay_settings(config_path: Path, overlay: SubtitleOverlay) -> None:
+    write_overlay_settings_to_config(config_path, overlay.export_runtime_settings())
 
 
 def main() -> int:
