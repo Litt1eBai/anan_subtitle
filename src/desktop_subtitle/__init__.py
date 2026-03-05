@@ -1,0 +1,1 @@
+"""Desktop subtitle application package."""
