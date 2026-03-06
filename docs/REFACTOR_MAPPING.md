@@ -198,6 +198,7 @@ src/
 当前文件：
 
 - `src/presentation/model.py`
+- `src/presentation/controller.py`
 - `src/ui/overlay.py`
 - `src/ui/control_panel.py`
 - `src/ui/tray.py`
@@ -286,7 +287,7 @@ src/
 
 动作：
 
-- 新增 `presentation/controller.py`
+- 继续扩展 `presentation/controller.py`
 - 抽出展示状态流转
 - `ui/overlay.py` 收缩为 `presentation/qt/overlay_window.py`
 - 引入 `presentation/styles/base.py` 和 `registry.py`

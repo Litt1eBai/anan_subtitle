@@ -16,6 +16,7 @@
 - `audio.py` 负责麦克风音频回调与队列写入
 - `config.py/constants.py` 负责配置模型、参数解析和持久化
 - `presentation/model.py` 负责通用展示状态模型
+- `presentation/controller.py` 负责识别事件到展示状态的收口
 - `ui/overlay.py` 负责字幕窗口、绘制、动画、交互
 - `ui/control_panel.py` 负责设置面板
 - `ui/tray.py` 负责系统托盘
@@ -38,6 +39,7 @@ src/
     offline_session.py            # 非实时识别流程
   presentation/
     model.py                      # 通用展示状态模型
+    controller.py                 # 展示状态协调器
   ui/
     overlay.py                    # 字幕覆盖层绘制和交互
     control_panel.py              # 设置面板 UI（含模型组合切换/下载）
@@ -47,8 +49,9 @@ src/
 ## 当前依赖方向
 
 - `main.py -> app.py`
-- `app.py -> config/audio/recognition/ui/signals`
+- `app.py -> config/audio/recognition/presentation/ui/signals`
 - `recognition/* -> text_utils/signals`
+- `presentation/controller.py -> presentation.model -> ui/*`
 - `ui/* -> presentation.model/config(仅保存设置接口)`
 - `config.py` 不依赖 `ui/*`、`recognition/*`
 
@@ -62,14 +65,15 @@ src/
 6. 创建 `AppSignals`、音频队列和 `recognition.engine.ASRWorker`
 7. 启动音频流：`audio.build_audio_callback()` 持续向队列写入音频块
 8. `ASRWorker` 从队列取数据识别，发出 `subtitle/status/error` 信号
-9. UI 响应信号更新字幕或状态
-10. 退出时停止音频流、停止线程并回收托盘资源
+9. `presentation/controller.py` 接收识别信号并生成展示状态
+10. UI 根据展示状态更新字幕或状态
+11. 退出时停止音频流、停止线程并回收托盘资源
 
 ## 当前关键数据流
 
 - 音频流：`InputStream -> queue[np.ndarray] -> ASRWorker`
-- 字幕流：`ASRWorker -> AppSignals.subtitle -> SubtitleOverlay.set_subtitle`
-- 状态流：`ASRWorker/App -> AppSignals.status/error -> Overlay/日志`
+- 字幕流：`ASRWorker -> AppSignals -> SubtitlePresentationController -> SubtitleOverlay.apply_view_state`
+- 状态流：`ASRWorker/App -> AppSignals.status/error -> SubtitlePresentationController -> Overlay/日志`
 - 设置流：`Overlay runtime settings -> config.write_overlay_settings_to_config`
 
 ## 当前主要问题
@@ -127,7 +131,7 @@ src/
 
 - `recognition/*` 不直接操作 UI 对象，只通过信号输出状态和字幕
 - `ui/*` 不加载模型，不管理音频线程
-- 纯逻辑优先放到 `text_utils.py`、`config.py` 或 `presentation/model.py`
+- 纯逻辑优先放到 `text_utils.py`、`config.py`、`presentation/model.py` 或 `presentation/controller.py`
 - 配置读写集中在配置模块，不分散到 UI 细节中
 
 ## 当前重构建议

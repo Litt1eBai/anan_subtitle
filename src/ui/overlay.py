@@ -92,6 +92,13 @@ class SubtitleOverlay(QWidget):
     def export_view_state(self) -> SubtitleViewState:
         return SubtitleViewState(**self._view_state.to_dict())
 
+    def apply_view_state(self, view_state: SubtitleViewState) -> None:
+        self.set_status(view_state.status_text)
+        if view_state.subtitle_text.strip():
+            self.set_subtitle(view_state.subtitle_text)
+            return
+        self.clear_subtitle()
+
     def export_style_spec(self) -> SubtitleStyleSpec:
         return SubtitleStyleSpec(**self._style_spec.to_dict())
 

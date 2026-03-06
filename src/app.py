@@ -25,6 +25,7 @@ from constants import (
     MODEL_PROFILE_PRESETS,
     MODEL_PROFILE_REALTIME,
 )
+from presentation import SubtitlePresentationController
 from signals import AppSignals
 from ui import OverlayControlPanel, SubtitleOverlay, TrayController
 
@@ -163,15 +164,10 @@ def main() -> int:
     stop_event = threading.Event()
     audio_queue: "queue.Queue[np.ndarray]" = queue.Queue(maxsize=args.queue_size)
 
-    signals.subtitle.connect(overlay.set_subtitle)
-    signals.status.connect(overlay.set_status)
-
-    def on_error(msg: str) -> None:
-        LOGGER.error(msg)
-        overlay.set_status(f"[ERROR] {msg}")
-        overlay.clear_subtitle()
-
-    signals.error.connect(on_error)
+    presentation_controller = SubtitlePresentationController(overlay)
+    signals.subtitle.connect(presentation_controller.handle_subtitle)
+    signals.status.connect(presentation_controller.handle_status)
+    signals.error.connect(presentation_controller.handle_error)
     signals.status.emit("模型加载中...")
 
     worker = ASRWorker(args, audio_queue, signals, stop_event)
