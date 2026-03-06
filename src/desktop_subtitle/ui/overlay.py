@@ -5,6 +5,9 @@ from PySide6.QtCore import QPoint, QRect, Qt, QTimer, QElapsedTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPixmap, QLinearGradient, QPen, QBrush, QCloseEvent
 from PySide6.QtWidgets import QWidget
 
+from ..presentation.model import OverlayRuntimeSettings, SubtitleStyleSpec, SubtitleViewState
+
+
 class SubtitleOverlay(QWidget):
     settings_changed = Signal(dict)
     edit_mode_changed = Signal(bool)
@@ -12,8 +15,34 @@ class SubtitleOverlay(QWidget):
 
     def __init__(self, args: argparse.Namespace) -> None:
         super().__init__()
-        self._subtitle_text = ""
-        self._status_text = "模型加载中..."
+        self._view_state = SubtitleViewState()
+        self._style_spec = SubtitleStyleSpec(
+            font_family=str(args.font_family),
+            font_size=max(8, int(args.font_size)),
+            text_color=str(args.text_color),
+            text_max_lines=max(1, args.text_max_lines),
+            text_anim_enable=bool(args.text_anim_enable),
+            text_anim_duration_ms=max(0, args.text_anim_duration_ms),
+            text_anim_fade_px=max(1, args.text_anim_fade_px),
+            text_anim_offset_y=max(0, args.text_anim_offset_y),
+        )
+        self._runtime_settings = OverlayRuntimeSettings(
+            x=int(args.x),
+            y=int(args.y),
+            width=max(1, int(args.width)),
+            height=max(1, int(args.height)),
+            windowed_mode=bool(args.windowed_mode),
+            stay_on_top=bool(args.stay_on_top),
+            font_size=self._style_spec.font_size,
+            text_x=max(0, args.text_x),
+            text_y=max(0, args.text_y),
+            text_width=max(0, args.text_width),
+            text_height=max(0, args.text_height),
+            bg_width=max(0, int(args.bg_width)),
+            bg_height=max(0, int(args.bg_height)),
+            bg_offset_x=int(args.bg_offset_x),
+            bg_offset_y=int(args.bg_offset_y),
+        )
         self._interaction_mode: str | None = None
         self._drag_origin: QPoint | None = None
         self._win_origin: QPoint | None = None
@@ -29,57 +58,76 @@ class SubtitleOverlay(QWidget):
         self._clear_timer.timeout.connect(self.clear_subtitle)
         self._bg_pixmap = QPixmap(args.bg_image) if args.bg_image else QPixmap()
         self._lock_size_to_bg = bool(args.lock_size_to_bg)
-        self._bg_width = max(0, int(args.bg_width))
-        self._bg_height = max(0, int(args.bg_height))
-        self._bg_offset_x = int(args.bg_offset_x)
-        self._bg_offset_y = int(args.bg_offset_y)
-        self._windowed_mode = bool(args.windowed_mode)
-        self._stay_on_top = bool(args.stay_on_top)
-        self._font = QFont(args.font_family, args.font_size)
-        self._text_anim_enable = bool(args.text_anim_enable)
-        self._text_anim_duration_ms = max(0, args.text_anim_duration_ms)
-        self._text_anim_fade_px = max(1, args.text_anim_fade_px)
-        self._text_anim_offset_y = max(0, args.text_anim_offset_y)
-        self._text_anim_progress = 1.0
-        self._text_anim_start_progress = 0.0
+        self._font = QFont(self._style_spec.font_family, self._style_spec.font_size)
         self._text_anim_clock = QElapsedTimer()
         self._text_anim_timer = QTimer(self)
         self._text_anim_timer.setInterval(16)
         self._text_anim_timer.timeout.connect(self._tick_text_animation)
-        self._text_color = QColor(args.text_color)
+        self._text_color = QColor(self._style_spec.text_color)
         if not self._text_color.isValid():
             self._text_color = QColor(0, 0, 0)
-        self._text_x = max(0, args.text_x)
-        self._text_y = max(0, args.text_y)
-        self._text_width = max(0, args.text_width)
-        self._text_height = max(0, args.text_height)
-        self._text_max_lines = max(1, args.text_max_lines)
 
         self.setWindowTitle("Desktop Subtitle")
-        overlay_width = max(1, args.width)
-        overlay_height = max(1, args.height)
+        overlay_width = self._runtime_settings.width
+        overlay_height = self._runtime_settings.height
         if self._lock_size_to_bg and not self._bg_pixmap.isNull():
             overlay_width, overlay_height = self._resolved_bg_size()
-        self.setGeometry(args.x, args.y, overlay_width, overlay_height)
+            self._runtime_settings.width = overlay_width
+            self._runtime_settings.height = overlay_height
+        self.setGeometry(self._runtime_settings.x, self._runtime_settings.y, overlay_width, overlay_height)
         self._apply_window_flags()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setWindowOpacity(args.opacity)
 
     def _apply_window_flags(self) -> None:
-        if self._windowed_mode:
+        if self._runtime_settings.windowed_mode:
             flags = Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
         else:
             flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
-        if self._stay_on_top:
+        if self._runtime_settings.stay_on_top:
             flags |= Qt.WindowType.WindowStaysOnTopHint
         self.setWindowFlags(flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+
+    def export_view_state(self) -> SubtitleViewState:
+        return SubtitleViewState(**self._view_state.to_dict())
+
+    def export_style_spec(self) -> SubtitleStyleSpec:
+        return SubtitleStyleSpec(**self._style_spec.to_dict())
+
+    def export_runtime_settings_model(self) -> OverlayRuntimeSettings:
+        geometry = self.geometry()
+        text_rect = self._build_text_rect()
+        return OverlayRuntimeSettings(
+            x=int(geometry.x()),
+            y=int(geometry.y()),
+            width=int(geometry.width()),
+            height=int(geometry.height()),
+            windowed_mode=bool(self._runtime_settings.windowed_mode),
+            stay_on_top=bool(self._runtime_settings.stay_on_top),
+            font_size=int(self._font.pointSize()),
+            text_x=int(text_rect.x()),
+            text_y=int(text_rect.y()),
+            text_width=int(text_rect.width()),
+            text_height=int(text_rect.height()),
+            bg_width=int(self._runtime_settings.bg_width),
+            bg_height=int(self._runtime_settings.bg_height),
+            bg_offset_x=int(self._runtime_settings.bg_offset_x),
+            bg_offset_y=int(self._runtime_settings.bg_offset_y),
+        )
+
+    def export_runtime_settings(self) -> dict[str, Any]:
+        return self.export_runtime_settings_model().to_dict()
+
+    def _emit_settings_changed(self) -> None:
+        self._runtime_settings = self.export_runtime_settings_model()
+        self.settings_changed.emit(self._runtime_settings.to_dict())
 
     def is_edit_mode(self) -> bool:
         return self._edit_mode
 
     def is_windowed_mode(self) -> bool:
-        return self._windowed_mode
+        return self._runtime_settings.windowed_mode
 
     def set_edit_mode(self, enabled: bool) -> None:
         target = bool(enabled)
@@ -91,9 +139,9 @@ class SubtitleOverlay(QWidget):
 
     def set_stay_on_top(self, enabled: bool) -> None:
         target = bool(enabled)
-        if self._stay_on_top == target:
+        if self._runtime_settings.stay_on_top == target:
             return
-        self._stay_on_top = target
+        self._runtime_settings.stay_on_top = target
         geometry = self.geometry()
         was_visible = self.isVisible()
         self._apply_window_flags()
@@ -104,9 +152,9 @@ class SubtitleOverlay(QWidget):
 
     def set_windowed_mode(self, enabled: bool) -> None:
         target = bool(enabled)
-        if self._windowed_mode == target:
+        if self._runtime_settings.windowed_mode == target:
             return
-        self._windowed_mode = target
+        self._runtime_settings.windowed_mode = target
         geometry = self.geometry()
         was_visible = self.isVisible()
         self._apply_window_flags()
@@ -120,6 +168,8 @@ class SubtitleOverlay(QWidget):
         target = max(8, int(size))
         if self._font.pointSize() == target:
             return
+        self._style_spec.font_size = target
+        self._runtime_settings.font_size = target
         self._font = QFont(self._font.family(), target)
         self.update()
         self._emit_settings_changed()
@@ -127,40 +177,42 @@ class SubtitleOverlay(QWidget):
     def set_bg_offset(self, offset_x: int, offset_y: int) -> None:
         next_x = int(offset_x)
         next_y = int(offset_y)
-        if self._bg_offset_x == next_x and self._bg_offset_y == next_y:
+        if self._runtime_settings.bg_offset_x == next_x and self._runtime_settings.bg_offset_y == next_y:
             return
-        self._bg_offset_x = next_x
-        self._bg_offset_y = next_y
+        self._runtime_settings.bg_offset_x = next_x
+        self._runtime_settings.bg_offset_y = next_y
         self.update()
         self._emit_settings_changed()
 
     def set_bg_size(self, width: int, height: int) -> None:
         next_w = max(0, int(width))
         next_h = max(0, int(height))
-        if self._bg_width == next_w and self._bg_height == next_h:
+        if self._runtime_settings.bg_width == next_w and self._runtime_settings.bg_height == next_h:
             return
-        self._bg_width = next_w
-        self._bg_height = next_h
+        self._runtime_settings.bg_width = next_w
+        self._runtime_settings.bg_height = next_h
         if self._lock_size_to_bg and not self._bg_pixmap.isNull():
             draw_w, draw_h = self._resolved_bg_size()
             self.resize(draw_w, draw_h)
+            self._runtime_settings.width = draw_w
+            self._runtime_settings.height = draw_h
         self.update()
         self._emit_settings_changed()
 
     def _resolved_bg_size(self) -> tuple[int, int]:
         if self._bg_pixmap.isNull():
             return 0, 0
-        draw_w = self._bg_width if self._bg_width > 0 else self._bg_pixmap.width()
-        draw_h = self._bg_height if self._bg_height > 0 else self._bg_pixmap.height()
+        draw_w = self._runtime_settings.bg_width if self._runtime_settings.bg_width > 0 else self._bg_pixmap.width()
+        draw_h = self._runtime_settings.bg_height if self._runtime_settings.bg_height > 0 else self._bg_pixmap.height()
         return max(1, draw_w), max(1, draw_h)
 
     def _ensure_explicit_text_box(self, text_rect: QRect) -> None:
-        if self._text_width > 0 and self._text_height > 0:
+        if self._runtime_settings.text_width > 0 and self._runtime_settings.text_height > 0:
             return
-        self._text_x = text_rect.x()
-        self._text_y = text_rect.y()
-        self._text_width = text_rect.width()
-        self._text_height = text_rect.height()
+        self._runtime_settings.text_x = text_rect.x()
+        self._runtime_settings.text_y = text_rect.y()
+        self._runtime_settings.text_width = text_rect.width()
+        self._runtime_settings.text_height = text_rect.height()
 
     def set_text_box(self, x: int, y: int, width: int, height: int) -> None:
         overlay_width = max(1, self.width())
@@ -171,59 +223,35 @@ class SubtitleOverlay(QWidget):
         safe_y = max(0, min(int(y), overlay_height - safe_h))
 
         if (
-            self._text_x == safe_x
-            and self._text_y == safe_y
-            and self._text_width == safe_w
-            and self._text_height == safe_h
+            self._runtime_settings.text_x == safe_x
+            and self._runtime_settings.text_y == safe_y
+            and self._runtime_settings.text_width == safe_w
+            and self._runtime_settings.text_height == safe_h
         ):
             return
-        self._text_x = safe_x
-        self._text_y = safe_y
-        self._text_width = safe_w
-        self._text_height = safe_h
+        self._runtime_settings.text_x = safe_x
+        self._runtime_settings.text_y = safe_y
+        self._runtime_settings.text_width = safe_w
+        self._runtime_settings.text_height = safe_h
         self.update()
         self._emit_settings_changed()
-
-    def export_runtime_settings(self) -> dict[str, Any]:
-        geometry = self.geometry()
-        text_rect = self._build_text_rect()
-        return {
-            "x": int(geometry.x()),
-            "y": int(geometry.y()),
-            "width": int(geometry.width()),
-            "height": int(geometry.height()),
-            "windowed_mode": bool(self._windowed_mode),
-            "stay_on_top": bool(self._stay_on_top),
-            "font_size": int(self._font.pointSize()),
-            "text_x": int(text_rect.x()),
-            "text_y": int(text_rect.y()),
-            "text_width": int(text_rect.width()),
-            "text_height": int(text_rect.height()),
-            "bg_width": int(self._bg_width),
-            "bg_height": int(self._bg_height),
-            "bg_offset_x": int(self._bg_offset_x),
-            "bg_offset_y": int(self._bg_offset_y),
-        }
-
-    def _emit_settings_changed(self) -> None:
-        self.settings_changed.emit(self.export_runtime_settings())
 
     def set_subtitle(self, text: str) -> None:
         cleaned = text.strip()
         if not cleaned:
             self.clear_subtitle()
             return
-        if cleaned == self._subtitle_text:
+        if cleaned == self._view_state.subtitle_text:
             if self._clear_after_ms > 0:
                 self._clear_timer.start(self._clear_after_ms)
             return
-        previous = self._subtitle_text
-        self._subtitle_text = cleaned
-        if self._text_anim_enable:
+        previous = self._view_state.subtitle_text
+        self._view_state.subtitle_text = cleaned
+        if self._style_spec.text_anim_enable:
             self._start_text_animation(self._calc_start_progress(previous, cleaned))
         else:
             self._text_anim_timer.stop()
-            self._text_anim_progress = 1.0
+            self._view_state.animation_progress = 1.0
         if self._clear_after_ms > 0:
             self._clear_timer.start(self._clear_after_ms)
         else:
@@ -232,29 +260,30 @@ class SubtitleOverlay(QWidget):
 
     def set_status(self, text: str) -> None:
         cleaned = text.strip()
-        if self._status_text == cleaned:
+        if self._view_state.status_text == cleaned:
             return
-        self._status_text = cleaned
-        if not self._subtitle_text:
+        self._view_state.status_text = cleaned
+        if not self._view_state.subtitle_text:
             self.update()
 
     def clear_subtitle(self) -> None:
         self._clear_timer.stop()
         self._text_anim_timer.stop()
-        self._text_anim_progress = 1.0
-        if not self._subtitle_text:
+        self._view_state.animation_progress = 1.0
+        self._view_state.animation_start_progress = 0.0
+        if not self._view_state.subtitle_text:
             return
-        self._subtitle_text = ""
+        self._view_state.subtitle_text = ""
         self.update()
 
     def _start_text_animation(self, start_progress: float = 0.0) -> None:
-        if not self._text_anim_enable or self._text_anim_duration_ms <= 0:
-            self._text_anim_progress = 1.0
+        if not self._style_spec.text_anim_enable or self._style_spec.text_anim_duration_ms <= 0:
+            self._view_state.animation_progress = 1.0
             self._text_anim_timer.stop()
             return
         clamped = min(1.0, max(0.0, start_progress))
-        self._text_anim_start_progress = clamped
-        self._text_anim_progress = clamped
+        self._view_state.animation_start_progress = clamped
+        self._view_state.animation_progress = clamped
         if clamped >= 1.0:
             self._text_anim_timer.stop()
             return
@@ -262,15 +291,15 @@ class SubtitleOverlay(QWidget):
         self._text_anim_timer.start()
 
     def _tick_text_animation(self) -> None:
-        if self._text_anim_duration_ms <= 0:
+        if self._style_spec.text_anim_duration_ms <= 0:
             self._text_anim_timer.stop()
-            self._text_anim_progress = 1.0
+            self._view_state.animation_progress = 1.0
             self.update()
             return
         elapsed_ms = self._text_anim_clock.elapsed()
-        linear = min(1.0, max(0.0, elapsed_ms / float(self._text_anim_duration_ms)))
-        self._text_anim_progress = self._text_anim_start_progress + (
-            1.0 - self._text_anim_start_progress
+        linear = min(1.0, max(0.0, elapsed_ms / float(self._style_spec.text_anim_duration_ms)))
+        self._view_state.animation_progress = self._view_state.animation_start_progress + (
+            1.0 - self._view_state.animation_start_progress
         ) * linear
         self.update()
         if linear >= 1.0:
@@ -304,12 +333,12 @@ class SubtitleOverlay(QWidget):
             painter.drawPixmap(bg_rect, self._bg_pixmap, self._bg_pixmap.rect())
 
         text_rect = self._build_text_rect()
-        max_height = QFontMetrics(self._font).lineSpacing() * self._text_max_lines
+        max_height = QFontMetrics(self._font).lineSpacing() * self._style_spec.text_max_lines
         text_rect.setHeight(min(text_rect.height(), max_height))
-        draw_text = self._subtitle_text if self._subtitle_text else self._status_text
+        draw_text = self._view_state.subtitle_text if self._view_state.subtitle_text else self._view_state.status_text
         if draw_text:
             draw_rect = self._build_centered_draw_rect(text_rect, draw_text)
-            if self._subtitle_text and self._text_anim_enable:
+            if self._view_state.subtitle_text and self._style_spec.text_anim_enable:
                 self._draw_reveal_text(painter, draw_rect, draw_text)
             else:
                 self._draw_text(painter, draw_rect, draw_text, self._text_color)
@@ -368,7 +397,7 @@ class SubtitleOverlay(QWidget):
         painter.restore()
 
     def _draw_reveal_text(self, painter: QPainter, text_rect: QRect, text: str) -> None:
-        progress = min(1.0, max(0.0, self._text_anim_progress))
+        progress = min(1.0, max(0.0, self._view_state.animation_progress))
         if progress >= 0.999:
             self._draw_text(painter, text_rect, text, self._text_color)
             return
@@ -378,7 +407,7 @@ class SubtitleOverlay(QWidget):
         if front_w <= 0:
             return
 
-        fade_w = max(1, min(self._text_anim_fade_px, front_w))
+        fade_w = max(1, min(self._style_spec.text_anim_fade_px, front_w))
         solid_w = max(0, front_w - fade_w)
 
         if solid_w > 0:
@@ -415,8 +444,8 @@ class SubtitleOverlay(QWidget):
             return QRect()
         draw_w, draw_h = self._resolved_bg_size()
         return QRect(
-            self._bg_offset_x,
-            self._bg_offset_y,
+            self._runtime_settings.bg_offset_x,
+            self._runtime_settings.bg_offset_y,
             draw_w,
             draw_h,
         )
@@ -425,13 +454,13 @@ class SubtitleOverlay(QWidget):
         rect = self.rect()
         max_x = max(0, rect.width() - 1)
         max_y = max(0, rect.height() - 1)
-        text_x = min(self._text_x, max_x)
-        text_y = min(self._text_y, max_y)
+        text_x = min(self._runtime_settings.text_x, max_x)
+        text_y = min(self._runtime_settings.text_y, max_y)
 
         available_w = max(1, rect.width() - text_x)
         available_h = max(1, rect.height() - text_y)
-        text_w = self._text_width if self._text_width > 0 else available_w
-        text_h = self._text_height if self._text_height > 0 else available_h
+        text_w = self._runtime_settings.text_width if self._runtime_settings.text_width > 0 else available_w
+        text_h = self._runtime_settings.text_height if self._runtime_settings.text_height > 0 else available_h
 
         return QRect(
             text_x,
@@ -537,17 +566,17 @@ class SubtitleOverlay(QWidget):
         if interaction is not None:
             self._ensure_explicit_text_box(text_rect)
             self._drag_start_text_rect = QRect(
-                self._text_x,
-                self._text_y,
-                max(1, self._text_width),
-                max(1, self._text_height),
+                self._runtime_settings.text_x,
+                self._runtime_settings.text_y,
+                max(1, self._runtime_settings.text_width),
+                max(1, self._runtime_settings.text_height),
             )
             self._interaction_mode = f"text_{interaction}"
             return
 
         bg_rect = self._build_bg_rect()
         if not bg_rect.isNull() and bg_rect.contains(local_pos):
-            self._drag_start_bg_offset = QPoint(self._bg_offset_x, self._bg_offset_y)
+            self._drag_start_bg_offset = QPoint(self._runtime_settings.bg_offset_x, self._runtime_settings.bg_offset_y)
             self._interaction_mode = "move_bg"
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
