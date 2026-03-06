@@ -9,21 +9,31 @@
 ```text
 src/
   main.py
-  app.py
   asr.py
   audio.py
   config.py
   constants.py
   signals.py
   text_utils.py
+  app/
+    __init__.py
+    bootstrap.py
+    application.py
   recognition/
     engine.py
     realtime_session.py
     offline_session.py
   presentation/
     model.py
+    controller.py
+    qt/
+      overlay_window.py
+      overlay_interaction.py
+      overlay_renderer.py
   ui/
     overlay.py
+    overlay_interaction.py
+    overlay_renderer.py
     control_panel.py
     tray.py
 ```
@@ -68,7 +78,7 @@ src/
 - 优先做“拆分”，其次才是“改名”
 - 当前已完成 `src/desktop_subtitle -> src/` 扁平化，不再引入新的顶层产品包
 - 映射表中的“目标文件”表示主要归属，不代表必须一步到位
-- 过渡期允许保留兼容入口，例如 `src/asr.py`
+- 过渡期允许保留兼容入口，例如 `src/asr.py` 和 `src/ui/*`
 
 ## 文件级映射
 
@@ -77,7 +87,9 @@ src/
 当前文件：
 
 - `src/main.py`
-- `src/app.py`
+- `src/app/__init__.py`
+- `src/app/bootstrap.py`
+- `src/app/application.py`
 
 目标文件：
 
@@ -91,10 +103,10 @@ src/
   - 保持薄入口
   - 继续只负责调用应用启动函数
 
-- `app.py`
-  - 拆出对象装配到 `bootstrap.py`
-  - 拆出生命周期控制到 `application.py`
-  - 移除识别模式细节、模型下载细节、UI 具体操作细节
+- `app/__init__.py` / `app/bootstrap.py` / `app/application.py`
+  - 已完成对象装配到 `bootstrap.py` 的第一轮拆分
+  - 已完成生命周期控制到 `application.py` 的第一轮拆分
+  - 后续继续移除识别模式细节、模型下载细节、UI 具体操作细节
 
 建议归属：
 
@@ -199,10 +211,10 @@ src/
 
 - `src/presentation/model.py`
 - `src/presentation/controller.py`
-- `src/ui/overlay.py`
 - `src/presentation/qt/overlay_window.py`
 - `src/presentation/qt/overlay_interaction.py`
 - `src/presentation/qt/overlay_renderer.py`
+- `src/ui/overlay.py`
 - `src/ui/overlay_interaction.py`
 - `src/ui/overlay_renderer.py`
 - `src/ui/control_panel.py`
@@ -226,25 +238,22 @@ src/
   - 继续作为平台无关的展示状态模型
   - 后续吸收更多纯展示数据结构
 
-- `overlay.py`
-  - 当前仍是明显的上帝类之一
-  - 下一步重点是拆“展示控制”和“Qt 实现”的边界
-
-建议拆分方向：
-
 - `presentation/controller.py`
-  - 接收识别层事件
-  - 维护当前展示状态
-  - 调用样式系统和具体视图更新
+  - 已经接管识别事件到展示状态的收口
+  - 下一步继续把状态应用细节从 Qt 窗口里下沉出来
 
 - `presentation/qt/overlay_window.py`
-  - 保留 QWidget
-  - 保留鼠标交互和窗口交互
-  - 不再承担字幕业务状态流转
+  - 现已承载 Qt 字幕窗口实现
+  - 仍需继续下沉剩余交互和状态应用逻辑
 
-- `presentation/styles/*`
-  - 吸收当前和样式强相关的默认字体、颜色、布局参数
-  - 后续作为预设样式扩展点
+- `presentation/qt/overlay_interaction.py`
+  - 已承载文本框编辑命中与缩放几何
+
+- `presentation/qt/overlay_renderer.py`
+  - 已承载文本绘制、动画绘制与编辑辅助线绘制
+
+- `ui/overlay.py` / `ui/overlay_interaction.py` / `ui/overlay_renderer.py`
+  - 仅保留兼容转发，不再继续承载新逻辑
 
 - `control_panel.py -> presentation/qt/settings_window.py`
   - 继续放在 Qt 实现层
@@ -297,7 +306,7 @@ src/
 - `ui/overlay.py` 收缩为 `presentation/qt/overlay_window.py`
 - 引入 `presentation/styles/base.py` 和 `registry.py`
 
-### Phase 4: 收缩 app
+### Phase 4: 收缩 app（已开始）
 
 目标：
 
@@ -305,8 +314,8 @@ src/
 
 动作：
 
-- `app.py` 拆成 `app/bootstrap.py` 与 `app/application.py`
-- 退出顺序、资源释放统一收口
+- 已完成 `app/bootstrap.py` 与 `app/application.py` 的第一轮拆分
+- 继续整理启动准备、资源释放与异常收口
 
 ### Phase 5: 配置与入口收尾
 
@@ -325,8 +334,9 @@ src/
 | 当前文件 | 主要目标文件 | 说明 |
 | --- | --- | --- |
 | `src/main.py` | `src/main.py` | 保持薄入口 |
-| `src/app.py` | `src/app/bootstrap.py` | 对象装配 |
-| `src/app.py` | `src/app/application.py` | 生命周期与退出控制 |
+| `src/app/__init__.py` | `src/app/application.py` | 包入口导出 `main` |
+| `src/app/bootstrap.py` | `src/app/bootstrap.py` | 对象装配 |
+| `src/app/application.py` | `src/app/application.py` | 生命周期与退出控制 |
 | `src/asr.py` | `src/recognition/engine.py` | 兼容入口最终收敛到门面 |
 | `src/audio.py` | `src/recognition/audio_source.py` | 音频输入与缓冲 |
 | `src/text_utils.py` | `src/core/text_postprocess.py` | 文本提取与后处理 |
@@ -335,7 +345,10 @@ src/
 | `src/constants.py` | `src/core/settings.py` | 默认产品设置 |
 | `src/config.py` | `src/core/settings.py` | 设置模型定义逐步迁移 |
 | `src/presentation/model.py` | `src/presentation/model.py` | 通用展示模型继续扩充 |
-| `src/ui/overlay.py` | `src/presentation/qt/overlay_window.py` | Qt 字幕窗口 |
+| `src/presentation/controller.py` | `src/presentation/controller.py` | 展示状态与识别事件协调 |
+| `src/presentation/qt/overlay_window.py` | `src/presentation/qt/overlay_window.py` | Qt 字幕窗口 |
+| `src/presentation/qt/overlay_interaction.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 交互几何辅助 |
+| `src/presentation/qt/overlay_renderer.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 绘制辅助 |
 | `src/ui/control_panel.py` | `src/presentation/qt/settings_window.py` | 设置页 |
 | `src/ui/tray.py` | `src/presentation/qt/tray_controller.py` | 托盘控制 |
 | `src/signals.py` | `src/presentation/controller.py` 或 `src/presentation/qt/*` | 视最终事件机制而定 |

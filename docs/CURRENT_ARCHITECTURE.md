@@ -7,11 +7,16 @@
 
 ## 当前定位
 
-当前项目仍处于上帝类拆分阶段，但已经完成了第一轮目录扁平化：`src/desktop_subtitle/` 已被收敛为 `src/` 下的直接模块和子目录。
+当前项目仍处于上帝类拆分阶段，但已经完成了两轮关键收敛：
+
+- `src/desktop_subtitle/` 已扁平化到 `src/`
+- 展示层的 Qt 实现已经开始落位到 `presentation/qt/`
+- 启动层已经从单文件 `app.py` 收敛到 `app/bootstrap.py + app/application.py`
 
 当前实现可以概括为：
 
-- `app.py` 负责应用装配、首次模型选择、生命周期管理
+- `app/bootstrap.py` 负责对象装配、首次模型选择和启动准备
+- `app/application.py` 负责应用生命周期与运行主循环
 - `recognition/` 负责识别线程门面和实时/非实时识别 session
 - `audio.py` 负责麦克风音频回调与队列写入
 - `config.py/constants.py` 负责配置模型、参数解析和持久化
@@ -29,13 +34,16 @@
 ```text
 src/
   main.py                         # 启动入口（仅调用 app.main）
-  app.py                          # 应用编排（装配依赖、首次模型选择、生命周期管理）
   asr.py                          # 兼容入口，转发到 recognition.engine
   audio.py                        # 音频输入回调与队列写入
   config.py                       # 配置读写、参数解析、配置校验
   constants.py                    # 默认配置和持久化 key 常量
   signals.py                      # Qt 跨模块信号定义
   text_utils.py                   # 文本提取与增量合并等纯逻辑
+  app/
+    __init__.py                   # 包入口，导出 main
+    bootstrap.py                  # 对象装配与启动准备
+    application.py                # 生命周期与事件循环
   recognition/
     engine.py                     # ASRWorker 门面与模式分发
     realtime_session.py           # 实时识别流程
@@ -57,8 +65,8 @@ src/
 
 ## 当前依赖方向
 
-- `main.py -> app.py`
-- `app.py -> config/audio/recognition/presentation/ui/signals`
+- `main.py -> app.application`
+- `app/application.py -> app/bootstrap.py -> config/audio/recognition/presentation/ui/signals`
 - `recognition/* -> text_utils/signals`
 - `presentation/controller.py -> presentation.model -> presentation/qt/*`
 - `ui/* -> presentation/qt/* 或 config(仅保存设置接口)`
@@ -66,11 +74,11 @@ src/
 
 ## 当前运行流程
 
-1. `main.py` 调用 `app.main()`
+1. `main.py` 调用 `app.main()`，包入口再转到 `app/application.py`
 2. `config.parse_args()` 合并默认值、YAML、CLI 参数
 3. 首次运行提示用户选择模型组合，并写回 `config/app.yaml`
 4. 根据配置可选预下载模型组合
-5. 创建 `QApplication`、`SubtitleOverlay`、`OverlayControlPanel`、`TrayController`
+5. `app/bootstrap.py` 创建 `QApplication`、`SubtitleOverlay`、`OverlayControlPanel`、`TrayController`
 6. 创建 `AppSignals`、音频队列和 `recognition.engine.ASRWorker`
 7. 启动音频流：`audio.build_audio_callback()` 持续向队列写入音频块
 8. `ASRWorker` 从队列取数据识别，发出 `subtitle/status/error` 信号
@@ -87,16 +95,10 @@ src/
 
 ## 当前主要问题
 
-### 1. `app.py` 仍然承担过多装配外的职责
+### 1. `app` 包已经拆出，但职责仍可继续收口
 
-当前 `app.py` 不只是启动入口，还混入了：
-
-- 首次运行模型选择
-- 模型预下载流程
-- 部分 UI 初始化细节
-- 生命周期控制细节
-
-这使得应用装配和产品逻辑混在一起。
+当前 `app/bootstrap.py + app/application.py` 已经替代单文件 `app.py`。
+这一步完成了“对象装配”和“运行生命周期”的初步分离，但启动准备、模型下载与交互提示仍在该包内，后续还可以继续收口。
 
 ### 2. `recognition/engine.py` 仍是识别相关的核心协调点
 
@@ -139,7 +141,7 @@ src/
 
 在目标架构完全落地前，当前代码继续演进时应遵守以下规则：
 
-- 不再向 `app.py` 新增识别逻辑
+- 不再向 `app/application.py` 新增识别逻辑
 - 不再向 `recognition/engine.py` 新增新模式的大块分支
 - 不再向兼容层 `ui/*` 新增任何逻辑
 - 新增展示状态优先考虑抽到展示控制器或 Qt 实现层

@@ -3,21 +3,16 @@ import queue
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
-import sounddevice as sd
 from funasr import AutoModel
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from asr import ASRWorker
-from audio import build_audio_callback
-from config import (
-    apply_model_profile_to_args,
-    ensure_valid_image,
-    parse_args,
-    write_config_values,
-)
+from config import apply_model_profile_to_args, write_config_values
 from constants import (
     MODEL_PROFILE_CUSTOM,
     MODEL_PROFILE_HYBRID,
@@ -32,7 +27,20 @@ from ui import OverlayControlPanel, SubtitleOverlay, TrayController
 LOGGER = logging.getLogger("desktop_subtitle")
 
 
-def _build_model_download_kwargs_list(args) -> list[dict[str, object]]:
+@dataclass
+class ApplicationContext:
+    qt_app: QApplication
+    overlay: SubtitleOverlay
+    control_panel: OverlayControlPanel
+    tray_controller: TrayController | None
+    signals: AppSignals
+    stop_event: threading.Event
+    audio_queue: queue.Queue[np.ndarray]
+    presentation_controller: SubtitlePresentationController
+    worker: ASRWorker
+
+
+def build_model_download_kwargs_list(args: Any) -> list[dict[str, object]]:
     downloads: list[dict[str, object]] = []
     if getattr(args, "model_profile", "") == MODEL_PROFILE_HYBRID:
         downloads.append({"model": args.detector_model, "disable_update": True})
@@ -47,8 +55,8 @@ def _build_model_download_kwargs_list(args) -> list[dict[str, object]]:
     return downloads
 
 
-def _download_selected_model_combo(args) -> None:
-    downloads = _build_model_download_kwargs_list(args)
+def download_selected_model_combo(args: Any) -> None:
+    downloads = build_model_download_kwargs_list(args)
     start = time.perf_counter()
     LOGGER.info("Pre-downloading model combo (profile=%s)", args.model_profile)
     for kwargs in downloads:
@@ -64,7 +72,7 @@ def _download_selected_model_combo(args) -> None:
     LOGGER.info("Model combo is ready (elapsed=%.1fs)", elapsed)
 
 
-def _prompt_model_profile_on_first_run(args, config_path: Path) -> None:
+def prompt_model_profile_on_first_run(args: Any, config_path: Path) -> None:
     if not getattr(args, "model_profile_prompt_on_first_run", False) or getattr(
         args, "model_profile_prompted", False
     ):
@@ -115,35 +123,14 @@ def _prompt_model_profile_on_first_run(args, config_path: Path) -> None:
         print("是否立即下载所选模型？建议首次选择 yes。")
         download_answer = input("立即下载 [Y/n]: ").strip().lower()
         if download_answer in {"", "y", "yes"}:
-            _download_selected_model_combo(args)
+            download_selected_model_combo(args)
 
 
-def main() -> int:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        datefmt="%H:%M:%S",
-    )
-    try:
-        args = parse_args()
-    except ValueError as exc:
-        print(f"[ERROR] {exc}")
-        return 2
-    config_path = Path(args.config).expanduser().resolve()
-    _prompt_model_profile_on_first_run(args, config_path)
-    if args.model_download_on_startup:
-        _download_selected_model_combo(args)
-
-    args.bg_image = ensure_valid_image(args.bg_image, Path(args.config).expanduser())
-    LOGGER.info("Starting app with config: %s", config_path)
-    LOGGER.info("Model profile: %s (model=%s)", args.model_profile, args.model)
-    LOGGER.info("Background image: %s", args.bg_image or "<none>")
-    LOGGER.info("Subtitle auto-clear: %dms", args.subtitle_clear_ms)
-
-    app = QApplication(sys.argv)
+def build_application_context(args: Any, config_path: Path) -> ApplicationContext:
+    qt_app = QApplication(sys.argv)
     tray_available = QSystemTrayIcon.isSystemTrayAvailable()
     if args.tray_icon_enable and tray_available:
-        app.setQuitOnLastWindowClosed(False)
+        qt_app.setQuitOnLastWindowClosed(False)
 
     overlay = SubtitleOverlay(args)
     control_panel = OverlayControlPanel(overlay, config_path, args)
@@ -151,7 +138,7 @@ def main() -> int:
     if args.tray_icon_enable:
         if tray_available:
             tray_controller = TrayController(
-                app=app,
+                app=qt_app,
                 overlay=overlay,
                 control_panel=control_panel,
                 config_path=config_path,
@@ -162,8 +149,7 @@ def main() -> int:
 
     signals = AppSignals()
     stop_event = threading.Event()
-    audio_queue: "queue.Queue[np.ndarray]" = queue.Queue(maxsize=args.queue_size)
-
+    audio_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=args.queue_size)
     presentation_controller = SubtitlePresentationController(overlay)
     signals.subtitle.connect(presentation_controller.handle_subtitle)
     signals.status.connect(presentation_controller.handle_status)
@@ -171,51 +157,14 @@ def main() -> int:
     signals.status.emit("模型加载中...")
 
     worker = ASRWorker(args, audio_queue, signals, stop_event)
-    worker.start()
-
-    block_size = max(1, int(args.samplerate * args.block_ms / 1000))
-    audio_callback = build_audio_callback(audio_queue)
-
-    stream = None
-    try:
-        stream = sd.InputStream(
-            samplerate=args.samplerate,
-            channels=1,
-            dtype="float32",
-            callback=audio_callback,
-            blocksize=block_size,
-            device=args.device,
-        )
-        stream.start()
-        LOGGER.info(
-            "Audio input stream started (samplerate=%d, block_ms=%d)",
-            args.samplerate,
-            args.block_ms,
-        )
-        overlay.show()
-        if tray_controller is not None:
-            tray_controller.show()
-        if args.show_control_panel:
-            control_panel.move(overlay.x() + overlay.width() + 16, overlay.y())
-            control_panel.show()
-        LOGGER.info("Overlay window shown")
-        code = app.exec()
-    except Exception as exc:  # pylint: disable=broad-except
-        LOGGER.exception("Failed to start audio stream")
-        print(f"[ERROR] failed to start audio stream: {exc}")
-        code = 1
-    finally:
-        LOGGER.info("Shutting down...")
-        stop_event.set()
-        if stream is not None:
-            try:
-                stream.stop()
-                stream.close()
-            except Exception:
-                pass
-        if tray_controller is not None:
-            tray_controller.hide()
-        worker.join(timeout=2.0)
-        LOGGER.info("Worker stopped")
-
-    return code
+    return ApplicationContext(
+        qt_app=qt_app,
+        overlay=overlay,
+        control_panel=control_panel,
+        tray_controller=tray_controller,
+        signals=signals,
+        stop_event=stop_event,
+        audio_queue=audio_queue,
+        presentation_controller=presentation_controller,
+        worker=worker,
+    )
