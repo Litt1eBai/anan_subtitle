@@ -30,6 +30,8 @@ src/
       overlay_window.py
       overlay_interaction.py
       overlay_renderer.py
+      settings_window.py
+      tray_controller.py
   ui/
     overlay.py
     overlay_interaction.py
@@ -214,11 +216,13 @@ src/
 - `src/presentation/qt/overlay_window.py`
 - `src/presentation/qt/overlay_interaction.py`
 - `src/presentation/qt/overlay_renderer.py`
+- `src/presentation/qt/settings_window.py`
+- `src/presentation/qt/tray_controller.py`
 - `src/ui/overlay.py`
 - `src/ui/overlay_interaction.py`
 - `src/ui/overlay_renderer.py`
-- `src/ui/control_panel.py`
-- `src/ui/tray.py`
+- `src/ui/control_panel.py`（兼容转发）
+- `src/ui/tray.py`（兼容转发）
 - `src/signals.py`
 
 目标文件：
@@ -252,17 +256,19 @@ src/
 - `presentation/qt/overlay_renderer.py`
   - 已承载文本绘制、动画绘制与编辑辅助线绘制
 
+- `presentation/qt/settings_window.py`
+  - 已承载设置面板 Qt 实现
+  - 继续只负责编辑产品设置和触发保存
+
+- `presentation/qt/tray_controller.py`
+  - 已承载托盘 Qt 实现
+  - 继续只负责窗口显隐、设置入口、退出入口
+
 - `ui/overlay.py` / `ui/overlay_interaction.py` / `ui/overlay_renderer.py`
   - 仅保留兼容转发，不再继续承载新逻辑
 
-- `control_panel.py -> presentation/qt/settings_window.py`
-  - 继续放在 Qt 实现层
-  - 不直接维护识别状态机
-  - 只负责编辑产品设置和触发保存
-
-- `tray.py -> presentation/qt/tray_controller.py`
-  - 保持托盘层职责
-  - 只负责窗口显隐、设置入口、退出入口
+- `ui/control_panel.py` / `ui/tray.py`
+  - 仅保留兼容转发，不再继续承载新逻辑
 
 - `signals.py`
   - 如果仍基于 Qt signal，可暂时保留在 Qt 实现附近
@@ -293,7 +299,7 @@ src/
 - 新增 `recognition/audio_source.py`
 - 把 `audio.py` 收缩为兼容入口或删除
 
-### Phase 3: 拆展示控制与 Qt 实现
+### Phase 3: 拆展示控制与 Qt 实现（进行中）
 
 目标：
 

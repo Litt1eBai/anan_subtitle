@@ -21,8 +21,8 @@ from constants import (
     MODEL_PROFILE_REALTIME,
 )
 from presentation import SubtitlePresentationController
+from presentation.qt import OverlayControlPanel, SubtitleOverlay, TrayController
 from signals import AppSignals
-from ui import OverlayControlPanel, SubtitleOverlay, TrayController
 
 LOGGER = logging.getLogger("desktop_subtitle")
 

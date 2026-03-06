@@ -26,8 +26,9 @@
 - `presentation/qt/overlay_interaction.py` 负责文本框编辑命中与缩放几何逻辑
 - `presentation/qt/overlay_renderer.py` 负责字幕文本、动画和编辑辅助线绘制
 - `ui/overlay.py`、`ui/overlay_interaction.py`、`ui/overlay_renderer.py` 作为兼容转发层保留旧导入路径
-- `ui/control_panel.py` 负责设置面板
-- `ui/tray.py` 负责系统托盘
+- `presentation/qt/settings_window.py` 负责设置面板
+- `presentation/qt/tray_controller.py` 负责系统托盘
+- `ui/control_panel.py`、`ui/tray.py` 作为兼容转发层保留旧导入路径
 
 ## 当前模块结构
 
@@ -55,18 +56,20 @@ src/
       overlay_window.py           # Qt 字幕窗口实现
       overlay_interaction.py      # 编辑几何辅助
       overlay_renderer.py         # 绘制辅助
+      settings_window.py          # 设置面板 UI（含模型组合切换/下载）
+      tray_controller.py          # 托盘图标和菜单控制
   ui/
     overlay.py                    # 兼容转发层
     overlay_interaction.py        # 兼容转发层
     overlay_renderer.py           # 兼容转发层
-    control_panel.py              # 设置面板 UI（含模型组合切换/下载）
-    tray.py                       # 托盘图标和菜单控制
+    control_panel.py              # 兼容转发层
+    tray.py                       # 兼容转发层
 ```
 
 ## 当前依赖方向
 
 - `main.py -> app.application`
-- `app/application.py -> app/bootstrap.py -> config/audio/recognition/presentation/ui/signals`
+- `app/application.py -> app/bootstrap.py -> config/audio/recognition/presentation/signals`
 - `recognition/* -> text_utils/signals`
 - `presentation/controller.py -> presentation.model -> presentation/qt/*`
 - `ui/* -> presentation/qt/* 或 config(仅保存设置接口)`
