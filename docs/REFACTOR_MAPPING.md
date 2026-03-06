@@ -27,6 +27,10 @@ src/
   presentation/
     model.py
     controller.py
+    styles/
+      base.py
+      registry.py
+      preset_default.py
     qt/
       overlay_window.py
       overlay_interaction.py
@@ -218,6 +222,9 @@ src/
 
 - `src/presentation/model.py`
 - `src/presentation/controller.py`
+- `src/presentation/styles/base.py`
+- `src/presentation/styles/registry.py`
+- `src/presentation/styles/preset_default.py`
 - `src/presentation/qt/overlay_window.py`
 - `src/presentation/qt/overlay_interaction.py`
 - `src/presentation/qt/overlay_renderer.py`
@@ -246,6 +253,10 @@ src/
 - `presentation/model.py`
   - 继续作为平台无关的展示状态模型
   - 后续吸收更多纯展示数据结构
+
+- `presentation/styles/base.py` / `registry.py` / `preset_default.py`
+  - 已提供最小样式接口、注册表与默认样式预设
+  - 后续新增预设样式优先落到该目录
 
 - `presentation/controller.py`
   - 已经接管识别事件到展示状态的收口

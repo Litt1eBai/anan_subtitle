@@ -23,6 +23,7 @@
 - `config.py/constants.py` 负责配置模型、参数解析和持久化
 - `presentation/model.py` 负责通用展示状态模型
 - `presentation/controller.py` 负责识别事件到展示状态的收口
+- `presentation/styles/` 已提供默认样式预设和样式注册表骨架
 - `presentation/qt/overlay_window.py` 负责字幕窗口、绘制、动画和 Qt 事件桥接
 - `presentation/qt/overlay_interaction.py` 负责文本框编辑命中与缩放几何逻辑
 - `presentation/qt/overlay_renderer.py` 负责字幕文本、动画和编辑辅助线绘制
@@ -54,6 +55,10 @@ src/
   presentation/
     model.py                      # 通用展示状态模型
     controller.py                 # 展示状态协调器
+    styles/
+      base.py                     # 样式接口定义
+      registry.py                 # 样式注册表
+      preset_default.py           # 默认样式预设
     qt/
       overlay_window.py           # Qt 字幕窗口实现
       overlay_interaction.py      # 编辑几何辅助
@@ -138,6 +143,7 @@ src/
 
 - `recognition/*` 不直接操作 UI 对象，只通过信号输出状态和字幕
 - `presentation/controller.py` 负责识别事件到展示状态的收口
+- `presentation/styles/` 已提供默认样式预设和样式注册表骨架
 - Qt 相关绘制和交互优先下沉到 `presentation/qt/*`
 - `ui/*` 中的兼容层不再继续承载新逻辑
 - 配置读写集中在配置模块，不分散到 UI 细节中
@@ -165,3 +171,4 @@ src/
 
 - 目标架构：[ARCHITECTURE.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/ARCHITECTURE.md)
 - 重构映射：[REFACTOR_MAPPING.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/REFACTOR_MAPPING.md)
+

@@ -6,6 +6,7 @@ from PySide6.QtGui import QColor, QFont, QFontMetrics, QCloseEvent, QPainter, QP
 from PySide6.QtWidgets import QWidget
 
 from presentation.model import OverlayRuntimeSettings, SubtitleStyleSpec, SubtitleViewState
+from presentation.styles import DEFAULT_STYLE_ID, get_style
 from presentation.qt.overlay_interaction import build_text_handle_rects, hit_test_text_interaction, resize_text_rect
 from presentation.qt.overlay_renderer import (
     build_centered_draw_rect,
@@ -24,16 +25,8 @@ class SubtitleOverlay(QWidget):
     def __init__(self, args: argparse.Namespace) -> None:
         super().__init__()
         self._view_state = SubtitleViewState()
-        self._style_spec = SubtitleStyleSpec(
-            font_family=str(args.font_family),
-            font_size=max(8, int(args.font_size)),
-            text_color=str(args.text_color),
-            text_max_lines=max(1, args.text_max_lines),
-            text_anim_enable=bool(args.text_anim_enable),
-            text_anim_duration_ms=max(0, args.text_anim_duration_ms),
-            text_anim_fade_px=max(1, args.text_anim_fade_px),
-            text_anim_offset_y=max(0, args.text_anim_offset_y),
-        )
+        style = get_style(getattr(args, "subtitle_style", DEFAULT_STYLE_ID))
+        self._style_spec = style.build_spec(args)
         self._runtime_settings = OverlayRuntimeSettings(
             x=int(args.x),
             y=int(args.y),
@@ -527,4 +520,3 @@ class SubtitleOverlay(QWidget):
     def hideEvent(self, event) -> None:  # noqa: N802
         super().hideEvent(event)
         self.visibility_changed.emit(False)
-
