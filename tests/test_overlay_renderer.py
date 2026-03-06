@@ -3,7 +3,7 @@ import unittest
 from PySide6.QtCore import QRect
 from PySide6.QtGui import QFont, QGuiApplication
 
-from ui.overlay_renderer import build_centered_draw_rect
+from presentation.qt.overlay_renderer import build_centered_draw_rect
 
 
 class BuildCenteredDrawRectTests(unittest.TestCase):

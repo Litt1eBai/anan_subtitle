@@ -17,9 +17,10 @@
 - `config.py/constants.py` 负责配置模型、参数解析和持久化
 - `presentation/model.py` 负责通用展示状态模型
 - `presentation/controller.py` 负责识别事件到展示状态的收口
-- `ui/overlay.py` 负责字幕窗口、绘制、动画和 Qt 事件桥接
-- `ui/overlay_interaction.py` 负责文本框编辑命中与缩放几何逻辑
-- `ui/overlay_renderer.py` 负责字幕文本、动画和编辑辅助线绘制
+- `presentation/qt/overlay_window.py` 负责字幕窗口、绘制、动画和 Qt 事件桥接
+- `presentation/qt/overlay_interaction.py` 负责文本框编辑命中与缩放几何逻辑
+- `presentation/qt/overlay_renderer.py` 负责字幕文本、动画和编辑辅助线绘制
+- `ui/overlay.py`、`ui/overlay_interaction.py`、`ui/overlay_renderer.py` 作为兼容转发层保留旧导入路径
 - `ui/control_panel.py` 负责设置面板
 - `ui/tray.py` 负责系统托盘
 
@@ -42,9 +43,14 @@ src/
   presentation/
     model.py                      # 通用展示状态模型
     controller.py                 # 展示状态协调器
+    qt/
+      overlay_window.py           # Qt 字幕窗口实现
+      overlay_interaction.py      # 编辑几何辅助
+      overlay_renderer.py         # 绘制辅助
   ui/
-    overlay.py                    # 字幕覆盖层绘制和交互
-    overlay_renderer.py           # 绘制辅助
+    overlay.py                    # 兼容转发层
+    overlay_interaction.py        # 兼容转发层
+    overlay_renderer.py           # 兼容转发层
     control_panel.py              # 设置面板 UI（含模型组合切换/下载）
     tray.py                       # 托盘图标和菜单控制
 ```
@@ -54,8 +60,8 @@ src/
 - `main.py -> app.py`
 - `app.py -> config/audio/recognition/presentation/ui/signals`
 - `recognition/* -> text_utils/signals`
-- `presentation/controller.py -> presentation.model -> ui/*`
-- `ui/* -> presentation.model/config(仅保存设置接口)`
+- `presentation/controller.py -> presentation.model -> presentation/qt/*`
+- `ui/* -> presentation/qt/* 或 config(仅保存设置接口)`
 - `config.py` 不依赖 `ui/*`、`recognition/*`
 
 ## 当前运行流程
@@ -69,7 +75,7 @@ src/
 7. 启动音频流：`audio.build_audio_callback()` 持续向队列写入音频块
 8. `ASRWorker` 从队列取数据识别，发出 `subtitle/status/error` 信号
 9. `presentation/controller.py` 接收识别信号并生成展示状态
-10. UI 根据展示状态更新字幕或状态
+10. `presentation/qt/overlay_window.py` 根据展示状态更新字幕或状态
 11. 退出时停止音频流、停止线程并回收托盘资源
 
 ## 当前关键数据流
@@ -103,27 +109,18 @@ src/
 
 它已经比旧 `asr.py` 清晰，但仍是后续继续收缩的重点。
 
-### 3. `ui/overlay.py` 仍是展示层核心上帝类
+### 3. `presentation/qt/overlay_window.py` 仍偏重
 
-当前 `overlay.py` 同时承担：
+当前 `overlay_window.py` 仍同时承担：
 
 - QWidget 窗口行为
-- 文本绘制
-- 背景绘制
-- 字幕渐显动画
-- 编辑模式
-- 命中检测
-- 拖拽缩放
+- 剩余展示状态应用
+- 编辑模式交互
 - 窗口显隐事件
 
-它已经超出“单个窗口类”的合理职责范围。
+虽然绘制和部分交互几何已经拆出，但它仍未完全收缩成纯视图层。
 
-### 4. 展示模型虽然已抽离，但展示控制仍未单独收口
-
-当前已经有 `presentation/model.py`，但展示状态流转仍主要沉在 Qt 窗口和应用装配里。
-这意味着跨平台边界只完成了一半，还缺展示控制器这一层。
-
-### 5. 配置模型与产品设置边界仍然混杂
+### 4. 配置模型与产品设置边界仍然混杂
 
 当前配置既包含产品级设置，也包含大量 ASR 内部参数。
 对重构而言，这意味着设置页、配置文件和识别逻辑之间仍然耦合较重。
@@ -133,8 +130,9 @@ src/
 虽然还在重构中，但以下边界已经基本成立，应继续保持：
 
 - `recognition/*` 不直接操作 UI 对象，只通过信号输出状态和字幕
-- `ui/*` 不加载模型，不管理音频线程
-- 纯逻辑优先放到 `text_utils.py`、`config.py`、`presentation/model.py` 或 `presentation/controller.py`
+- `presentation/controller.py` 负责识别事件到展示状态的收口
+- Qt 相关绘制和交互优先下沉到 `presentation/qt/*`
+- `ui/*` 中的兼容层不再继续承载新逻辑
 - 配置读写集中在配置模块，不分散到 UI 细节中
 
 ## 当前重构建议
@@ -143,9 +141,9 @@ src/
 
 - 不再向 `app.py` 新增识别逻辑
 - 不再向 `recognition/engine.py` 新增新模式的大块分支
-- 不再向 `ui/overlay.py` 新增新的样式耦合逻辑
-- 新增样式相关代码优先往新的样式目录收拢
-- 新增展示状态优先考虑抽到通用展示模型或展示控制器
+- 不再向兼容层 `ui/*` 新增任何逻辑
+- 新增展示状态优先考虑抽到展示控制器或 Qt 实现层
+- 新增绘制和交互辅助优先收敛到 `presentation/qt/*`
 
 ## 当前文档的用途
 

@@ -200,6 +200,9 @@ src/
 - `src/presentation/model.py`
 - `src/presentation/controller.py`
 - `src/ui/overlay.py`
+- `src/presentation/qt/overlay_window.py`
+- `src/presentation/qt/overlay_interaction.py`
+- `src/presentation/qt/overlay_renderer.py`
 - `src/ui/overlay_interaction.py`
 - `src/ui/overlay_renderer.py`
 - `src/ui/control_panel.py`

@@ -2,7 +2,7 @@ import unittest
 
 from PySide6.QtCore import QPoint, QRect
 
-from ui.overlay_interaction import build_text_handle_rects, hit_test_text_interaction, resize_text_rect
+from presentation.qt.overlay_interaction import build_text_handle_rects, hit_test_text_interaction, resize_text_rect
 
 
 class BuildTextHandleRectsTests(unittest.TestCase):
