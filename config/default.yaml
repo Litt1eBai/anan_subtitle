@@ -84,8 +84,23 @@ encoder_chunk_look_back: 4
 # Streaming decoder look-back chunk count.
 decoder_chunk_look_back: 1
 
+# Model profile preset:
+# - realtime: low-latency streaming model combo
+# - offline: non-streaming model combo (accuracy priority)
+# - hybrid: streaming detector + offline recognizer
+# - custom: use model/vad/punc fields as-is
+model_profile: realtime
+# Prompt model profile selection on first run.
+model_profile_prompt_on_first_run: true
+# Internal marker: first-run prompt has been completed.
+model_profile_prompted: false
+# Pre-download selected model combo on startup.
+model_download_on_startup: false
+
 # ASR model. Use "paraformer-zh-streaming" for real-time mode.
 model: paraformer-zh-streaming
+# Detector model for hybrid mode sentence-start detection.
+detector_model: paraformer-zh-streaming
 # VAD model name for non-streaming pipeline.
 vad_model: fsmn-vad
 # Punctuation model name for non-streaming pipeline.
