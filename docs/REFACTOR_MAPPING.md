@@ -20,6 +20,7 @@ src/
     bootstrap.py
     application.py
   recognition/
+    audio_source.py
     engine.py
     realtime_session.py
     offline_session.py
@@ -128,7 +129,8 @@ src/
 当前文件：
 
 - `src/asr.py`
-- `src/audio.py`
+- `src/recognition/audio_source.py`
+- `src/audio.py`（兼容转发）
 - `src/recognition/engine.py`
 - `src/recognition/realtime_session.py`
 - `src/recognition/offline_session.py`
@@ -142,9 +144,12 @@ src/
 
 迁移建议：
 
-- `audio.py -> recognition/audio_source.py`
-  - 保留音频采集回调和队列溢出保护
+- `recognition/audio_source.py`
+  - 已承载音频采集回调和队列溢出保护
   - 不再感知识别模式和字幕逻辑
+
+- `audio.py`
+  - 仅保留兼容转发，不再承载新逻辑
 
 - `asr.py`
   - 继续只作为兼容入口
@@ -287,7 +292,7 @@ src/
 - 新代码优先写入目标目录
 - 旧入口只做兼容转发或最小修正
 
-### Phase 2: 收缩识别门面
+### Phase 2: 收缩识别门面（进行中）
 
 目标：
 

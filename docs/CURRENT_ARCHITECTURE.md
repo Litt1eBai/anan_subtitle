@@ -18,7 +18,8 @@
 - `app/bootstrap.py` 负责对象装配、首次模型选择和启动准备
 - `app/application.py` 负责应用生命周期与运行主循环
 - `recognition/` 负责识别线程门面和实时/非实时识别 session
-- `audio.py` 负责麦克风音频回调与队列写入
+- `recognition/audio_source.py` 负责麦克风音频回调与队列写入
+- `audio.py` 作为兼容转发层保留旧导入路径
 - `config.py/constants.py` 负责配置模型、参数解析和持久化
 - `presentation/model.py` 负责通用展示状态模型
 - `presentation/controller.py` 负责识别事件到展示状态的收口
@@ -36,7 +37,7 @@
 src/
   main.py                         # 启动入口（仅调用 app.main）
   asr.py                          # 兼容入口，转发到 recognition.engine
-  audio.py                        # 音频输入回调与队列写入
+  audio.py                        # 兼容转发层
   config.py                       # 配置读写、参数解析、配置校验
   constants.py                    # 默认配置和持久化 key 常量
   signals.py                      # Qt 跨模块信号定义
@@ -46,6 +47,7 @@ src/
     bootstrap.py                  # 对象装配与启动准备
     application.py                # 生命周期与事件循环
   recognition/
+    audio_source.py               # 音频输入回调与队列写入
     engine.py                     # ASRWorker 门面与模式分发
     realtime_session.py           # 实时识别流程
     offline_session.py            # 非实时识别流程
@@ -69,7 +71,7 @@ src/
 ## 当前依赖方向
 
 - `main.py -> app.application`
-- `app/application.py -> app/bootstrap.py -> config/audio/recognition/presentation/signals`
+- `app/application.py -> app/bootstrap.py -> config/recognition/presentation/signals`
 - `recognition/* -> text_utils/signals`
 - `presentation/controller.py -> presentation.model -> presentation/qt/*`
 - `ui/* -> presentation/qt/* 或 config(仅保存设置接口)`
@@ -83,7 +85,7 @@ src/
 4. 根据配置可选预下载模型组合
 5. `app/bootstrap.py` 创建 `QApplication`、`SubtitleOverlay`、`OverlayControlPanel`、`TrayController`
 6. 创建 `AppSignals`、音频队列和 `recognition.engine.ASRWorker`
-7. 启动音频流：`audio.build_audio_callback()` 持续向队列写入音频块
+7. 启动音频流：`recognition.audio_source.build_audio_callback()` 持续向队列写入音频块
 8. `ASRWorker` 从队列取数据识别，发出 `subtitle/status/error` 信号
 9. `presentation/controller.py` 接收识别信号并生成展示状态
 10. `presentation/qt/overlay_window.py` 根据展示状态更新字幕或状态
