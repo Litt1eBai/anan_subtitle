@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from ..text_utils import merge_incremental_text
+from text_utils import merge_incremental_text
 
 if TYPE_CHECKING:
-    from .engine import ASRWorker
+    from recognition.engine import ASRWorker
 
 LOGGER = logging.getLogger("desktop_subtitle")
 

@@ -10,6 +10,7 @@
 - 当前仅支持 Windows
 - 展示层需要为未来跨平台预留接口
 - 样式系统需要支持后续快速增加字幕预设
+- `src/` 下直接组织代码，不再额外包一层产品名目录
 
 ## 设计原则
 
@@ -52,40 +53,39 @@
 src/
   main.py
 
-  subtitle_app/
-    app/
-      bootstrap.py
-      application.py
+  app/
+    bootstrap.py
+    application.py
 
-    core/
-      models.py
-      settings.py
-      subtitle_pipeline.py
-      text_postprocess.py
+  core/
+    models.py
+    settings.py
+    subtitle_pipeline.py
+    text_postprocess.py
 
-    recognition/
-      engine.py
-      realtime_session.py
-      offline_session.py
-      audio_source.py
+  recognition/
+    engine.py
+    realtime_session.py
+    offline_session.py
+    audio_source.py
 
-    presentation/
-      model.py
-      controller.py
-      styles/
-        base.py
-        registry.py
-        preset_default.py
-      qt/
-        overlay_window.py
-        tray_controller.py
-        settings_window.py
+  presentation/
+    model.py
+    controller.py
+    styles/
+      base.py
+      registry.py
+      preset_default.py
+    qt/
+      overlay_window.py
+      tray_controller.py
+      settings_window.py
 ```
 
 说明：
 
-- `subtitle_app` 是新的顶层包名建议，用于表达“字幕产品应用”，避免继续沿用当前混合了实现与产品边界的命名。
-- 若重构初期不希望立即改包名，也可以先沿用 `desktop_subtitle`，待结构稳定后再统一迁移。
+- `src/` 下直接按职责分目录，不再保留 `desktop_subtitle/` 或新的顶层产品包目录。
+- 这样可以减少一次无意义的包名迁移，也更符合当前仓库已经完成的扁平化方向。
 
 ## 分层说明
 
@@ -367,7 +367,7 @@ Microphone
 
 - `app.py` 继续膨胀为新的上帝类
 - `overlay.py` 同时承担窗口、绘制、动画、交互、状态同步全部职责
-- `asr.py` 中继续堆积所有模式和状态机
+- `recognition/engine.py` 中继续堆积所有模式和状态机
 - 展示层直接读取 FunASR 原始输出
 - 样式预设直接操作配置文件或 QWidget 内部状态
 
@@ -381,23 +381,22 @@ Microphone
    - `core.settings`
 
 2. 拆识别层
-   - 从现有 `asr.py` 抽出 `realtime_session.py`
-   - 抽出 `offline_session.py`
-   - 增加 `engine.py`
+   - 从现有 `recognition/engine.py` 继续收缩门面逻辑
+   - 保持 `realtime_session.py` / `offline_session.py` 单一职责
+   - 补 `audio_source.py`
 
 3. 拆展示层
-   - 将 `overlay.py` 拆成通用展示模型与 Qt 实现
+   - 将 `ui/overlay.py` 拆成通用展示模型与 Qt 实现
    - 引入样式基类和注册表
+   - 增加 `presentation/controller.py`
 
 4. 收缩装配层
-   - 将 `app.py` 收缩到 `bootstrap.py + application.py`
+   - 将 `app.py` 收缩到 `app/bootstrap.py + app/application.py`
 
-5. 最后再统一整理配置和目录命名
+5. 最后再统一整理配置和目录归属
 
 ## 一句话原则
 
 本项目的目标架构不是“层数越多越好”，而是：
 
 以 FunASR 识别为核心，以通用展示模型为桥梁，让识别逻辑与平台展示实现解耦，同时为后续样式预设扩展和展示层跨平台预留清晰边界。
-
-

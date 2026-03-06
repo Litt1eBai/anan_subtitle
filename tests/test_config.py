@@ -4,7 +4,7 @@ import unittest
 import uuid
 from pathlib import Path
 
-from desktop_subtitle.config import (
+from config import (
     apply_model_profile_to_args,
     apply_model_profile_to_settings,
     ensure_runtime_config_path,
@@ -15,7 +15,7 @@ from desktop_subtitle.config import (
     resolve_runtime_config_path,
     write_config_values,
 )
-from desktop_subtitle.constants import (
+from constants import (
     DEFAULT_CONFIG_TEMPLATE_PATH,
     MODEL_PROFILE_OFFLINE,
     MODEL_PROFILE_REALTIME,

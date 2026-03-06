@@ -10,23 +10,23 @@ import sounddevice as sd
 from funasr import AutoModel
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from .asr import ASRWorker
-from .audio import build_audio_callback
-from .config import (
+from asr import ASRWorker
+from audio import build_audio_callback
+from config import (
     apply_model_profile_to_args,
     ensure_valid_image,
     parse_args,
     write_config_values,
 )
-from .constants import (
+from constants import (
     MODEL_PROFILE_CUSTOM,
     MODEL_PROFILE_HYBRID,
     MODEL_PROFILE_OFFLINE,
     MODEL_PROFILE_PRESETS,
     MODEL_PROFILE_REALTIME,
 )
-from .signals import AppSignals
-from .ui import OverlayControlPanel, SubtitleOverlay, TrayController
+from signals import AppSignals
+from ui import OverlayControlPanel, SubtitleOverlay, TrayController
 
 LOGGER = logging.getLogger("desktop_subtitle")
 

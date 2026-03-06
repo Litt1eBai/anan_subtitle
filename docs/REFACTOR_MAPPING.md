@@ -9,18 +9,23 @@
 ```text
 src/
   main.py
-  desktop_subtitle/
-    app.py
-    asr.py
-    audio.py
-    config.py
-    constants.py
-    signals.py
-    text_utils.py
-    ui/
-      overlay.py
-      control_panel.py
-      tray.py
+  app.py
+  asr.py
+  audio.py
+  config.py
+  constants.py
+  signals.py
+  text_utils.py
+  recognition/
+    engine.py
+    realtime_session.py
+    offline_session.py
+  presentation/
+    model.py
+  ui/
+    overlay.py
+    control_panel.py
+    tray.py
 ```
 
 ## 目标目录
@@ -29,42 +34,41 @@ src/
 src/
   main.py
 
-  subtitle_app/
-    app/
-      bootstrap.py
-      application.py
+  app/
+    bootstrap.py
+    application.py
 
-    core/
-      models.py
-      settings.py
-      subtitle_pipeline.py
-      text_postprocess.py
+  core/
+    models.py
+    settings.py
+    subtitle_pipeline.py
+    text_postprocess.py
 
-    recognition/
-      engine.py
-      realtime_session.py
-      offline_session.py
-      audio_source.py
+  recognition/
+    engine.py
+    realtime_session.py
+    offline_session.py
+    audio_source.py
 
-    presentation/
-      model.py
-      controller.py
-      styles/
-        base.py
-        registry.py
-        preset_default.py
-      qt/
-        overlay_window.py
-        tray_controller.py
-        settings_window.py
+  presentation/
+    model.py
+    controller.py
+    styles/
+      base.py
+      registry.py
+      preset_default.py
+    qt/
+      overlay_window.py
+      tray_controller.py
+      settings_window.py
 ```
 
 ## 映射原则
 
 - 优先做“拆分”，其次才是“改名”
-- 前几轮重构可以保留 `desktop_subtitle` 包名，避免同时改结构和导入路径
-- 待职责稳定后，再将包名统一迁移到 `subtitle_app`
+- 当前已完成 `src/desktop_subtitle -> src/` 扁平化，不再引入新的顶层产品包
 - 映射表中的“目标文件”表示主要归属，不代表必须一步到位
+- 过渡期允许保留兼容入口，例如 `src/asr.py`
 
 ## 文件级映射
 
@@ -73,13 +77,13 @@ src/
 当前文件：
 
 - `src/main.py`
-- `src/desktop_subtitle/app.py`
+- `src/app.py`
 
 目标文件：
 
 - `src/main.py`
-- `src/subtitle_app/app/bootstrap.py`
-- `src/subtitle_app/app/application.py`
+- `src/app/bootstrap.py`
+- `src/app/application.py`
 
 迁移建议：
 
@@ -109,45 +113,38 @@ src/
 
 当前文件：
 
-- `src/desktop_subtitle/asr.py`
-- `src/desktop_subtitle/audio.py`
+- `src/asr.py`
+- `src/audio.py`
+- `src/recognition/engine.py`
+- `src/recognition/realtime_session.py`
+- `src/recognition/offline_session.py`
 
 目标文件：
 
-- `src/subtitle_app/recognition/engine.py`
-- `src/subtitle_app/recognition/realtime_session.py`
-- `src/subtitle_app/recognition/offline_session.py`
-- `src/subtitle_app/recognition/audio_source.py`
+- `src/recognition/engine.py`
+- `src/recognition/realtime_session.py`
+- `src/recognition/offline_session.py`
+- `src/recognition/audio_source.py`
 
 迁移建议：
 
-- `audio.py -> audio_source.py`
+- `audio.py -> recognition/audio_source.py`
   - 保留音频采集回调和队列溢出保护
   - 不再感知识别模式和字幕逻辑
 
-- `asr.py -> engine.py + realtime_session.py + offline_session.py`
-  - `ASRWorker` 不再作为单文件大类继续膨胀
-  - 先把实时流程抽出去
-  - 再把非实时流程抽出去
-  - `engine.py` 只保留模式选择、启动和停止协调
+- `asr.py`
+  - 继续只作为兼容入口
+  - 不再承载新逻辑
 
-现有 `asr.py` 的建议拆分：
+- `recognition/engine.py`
+  - 只保留 worker 门面、模式选择、启动和停止协调
+  - 继续把具体流程下沉到 session
 
-- 放到 `engine.py`
-  - 工作线程门面
-  - session 创建逻辑
-  - 通用启动/停止
+- `recognition/realtime_session.py`
+  - 保持流式识别流程与 streaming cache 管理
 
-- 放到 `realtime_session.py`
-  - `_run_streaming`
-  - `_transcribe_streaming`
-  - streaming cache 管理
-  - 增量文本合并调用点
-
-- 放到 `offline_session.py`
-  - `_run_offline`
-  - `_timed_transcribe`
-  - 离线延迟统计
+- `recognition/offline_session.py`
+  - 保持非实时识别流程与延迟统计
 
 暂缓迁移的部分：
 
@@ -155,7 +152,7 @@ src/
 
 处理建议：
 
-- 短期可先继续留在 `engine.py`
+- 短期可继续留在 `recognition/engine.py`
 - 若后续仍保留该模式，再新增 `hybrid_session.py`
 - 若产品决定只保留两种模式，则在后续迭代中移除
 
@@ -163,16 +160,16 @@ src/
 
 当前文件：
 
-- `src/desktop_subtitle/text_utils.py`
-- `src/desktop_subtitle/constants.py`
-- `src/desktop_subtitle/config.py`
+- `src/text_utils.py`
+- `src/constants.py`
+- `src/config.py`
 
 目标文件：
 
-- `src/subtitle_app/core/models.py`
-- `src/subtitle_app/core/settings.py`
-- `src/subtitle_app/core/subtitle_pipeline.py`
-- `src/subtitle_app/core/text_postprocess.py`
+- `src/core/models.py`
+- `src/core/settings.py`
+- `src/core/subtitle_pipeline.py`
+- `src/core/text_postprocess.py`
 
 迁移建议：
 
@@ -200,34 +197,34 @@ src/
 
 当前文件：
 
-- `src/desktop_subtitle/ui/overlay.py`
-- `src/desktop_subtitle/ui/control_panel.py`
-- `src/desktop_subtitle/ui/tray.py`
-- `src/desktop_subtitle/signals.py`
+- `src/presentation/model.py`
+- `src/ui/overlay.py`
+- `src/ui/control_panel.py`
+- `src/ui/tray.py`
+- `src/signals.py`
 
 目标文件：
 
-- `src/subtitle_app/presentation/model.py`
-- `src/subtitle_app/presentation/controller.py`
-- `src/subtitle_app/presentation/styles/base.py`
-- `src/subtitle_app/presentation/styles/registry.py`
-- `src/subtitle_app/presentation/styles/preset_default.py`
-- `src/subtitle_app/presentation/qt/overlay_window.py`
-- `src/subtitle_app/presentation/qt/settings_window.py`
-- `src/subtitle_app/presentation/qt/tray_controller.py`
+- `src/presentation/model.py`
+- `src/presentation/controller.py`
+- `src/presentation/styles/base.py`
+- `src/presentation/styles/registry.py`
+- `src/presentation/styles/preset_default.py`
+- `src/presentation/qt/overlay_window.py`
+- `src/presentation/qt/settings_window.py`
+- `src/presentation/qt/tray_controller.py`
 
 迁移建议：
 
+- `presentation/model.py`
+  - 继续作为平台无关的展示状态模型
+  - 后续吸收更多纯展示数据结构
+
 - `overlay.py`
-  - 这是当前最明显的上帝类之一
-  - 先拆“展示模型”和“Qt 实现”的边界
+  - 当前仍是明显的上帝类之一
+  - 下一步重点是拆“展示控制”和“Qt 实现”的边界
 
 建议拆分方向：
-
-- `presentation/model.py`
-  - `SubtitleViewState`
-  - `SubtitleStyleSpec`
-  - 与平台无关的展示数据
 
 - `presentation/controller.py`
   - 接收识别层事件
@@ -243,38 +240,18 @@ src/
   - 吸收当前和样式强相关的默认字体、颜色、布局参数
   - 后续作为预设样式扩展点
 
-- `control_panel.py -> settings_window.py`
+- `control_panel.py -> presentation/qt/settings_window.py`
   - 继续放在 Qt 实现层
   - 不直接维护识别状态机
   - 只负责编辑产品设置和触发保存
 
-- `tray.py -> tray_controller.py`
+- `tray.py -> presentation/qt/tray_controller.py`
   - 保持托盘层职责
   - 只负责窗口显隐、设置入口、退出入口
 
 - `signals.py`
-  - 如果仍基于 Qt signal，可暂时保留在 `presentation/qt` 附近
+  - 如果仍基于 Qt signal，可暂时保留在 Qt 实现附近
   - 如果后续展示控制器变为普通 Python 协调器，则该文件应逐步收缩或消失
-
-### 5. 包名迁移
-
-当前包名：
-
-- `desktop_subtitle`
-
-目标包名：
-
-- `subtitle_app`
-
-建议顺序：
-
-1. 先在现有包名下完成职责拆分
-2. 等导入关系稳定后再统一重命名包
-
-原因：
-
-- 同时做职责拆分和全量导入迁移，风险较高
-- 当前正处于重构过程中，应优先缩小单次改动面
 
 ## 分阶段实施建议
 
@@ -282,38 +259,37 @@ src/
 
 目标：
 
-- 避免 `app.py`、`asr.py`、`overlay.py` 继续变大
+- 避免 `app.py`、`recognition/engine.py`、`ui/overlay.py` 继续变大
 
 动作：
 
-- 新增目标目录和空模块
-- 停止往旧上帝类继续塞新逻辑
-- 新代码优先写入目标文件
+- 新代码优先写入目标目录
+- 旧入口只做兼容转发或最小修正
 
-### Phase 2: 先拆识别
+### Phase 2: 收缩识别门面
 
 目标：
 
-- 让实时/非实时模式脱离单一大类
+- 让实时/非实时模式继续脱离中央门面
 
 动作：
 
-- 从 `asr.py` 抽出 realtime session
-- 从 `asr.py` 抽出 offline session
-- 用一个薄 `engine.py` 接管模式切换
+- 从 `recognition/engine.py` 继续下沉模式细节
+- 新增 `recognition/audio_source.py`
+- 把 `audio.py` 收缩为兼容入口或删除
 
-### Phase 3: 再拆展示
+### Phase 3: 拆展示控制与 Qt 实现
 
 目标：
 
-- 为跨平台展示预留边界
+- 为跨平台展示预留清晰边界
 
 动作：
 
-- 新增 `presentation/model.py`
-- 抽出展示状态模型
-- `overlay.py` 收缩为 `qt/overlay_window.py`
-- 引入 `styles/base.py` 和 `registry.py`
+- 新增 `presentation/controller.py`
+- 抽出展示状态流转
+- `ui/overlay.py` 收缩为 `presentation/qt/overlay_window.py`
+- 引入 `presentation/styles/base.py` 和 `registry.py`
 
 ### Phase 4: 收缩 app
 
@@ -323,10 +299,10 @@ src/
 
 动作：
 
-- `app.py` 拆成 `bootstrap.py` 与 `application.py`
+- `app.py` 拆成 `app/bootstrap.py` 与 `app/application.py`
 - 退出顺序、资源释放统一收口
 
-### Phase 5: 包名与配置整理
+### Phase 5: 配置与入口收尾
 
 目标：
 
@@ -334,31 +310,29 @@ src/
 
 动作：
 
-- 将 `desktop_subtitle` 重命名为 `subtitle_app`
 - 整理 `config.py/constants.py` 的归属
-- 统一文档和入口说明
+- 删除兼容入口文件
+- 统一文档和启动入口说明
 
 ## 当前文件到目标文件速查表
 
 | 当前文件 | 主要目标文件 | 说明 |
 | --- | --- | --- |
 | `src/main.py` | `src/main.py` | 保持薄入口 |
-| `src/desktop_subtitle/app.py` | `src/subtitle_app/app/bootstrap.py` | 对象装配 |
-| `src/desktop_subtitle/app.py` | `src/subtitle_app/app/application.py` | 生命周期与退出控制 |
-| `src/desktop_subtitle/asr.py` | `src/subtitle_app/recognition/engine.py` | 线程门面与模式调度 |
-| `src/desktop_subtitle/asr.py` | `src/subtitle_app/recognition/realtime_session.py` | 实时模式 |
-| `src/desktop_subtitle/asr.py` | `src/subtitle_app/recognition/offline_session.py` | 非实时模式 |
-| `src/desktop_subtitle/audio.py` | `src/subtitle_app/recognition/audio_source.py` | 音频输入与缓冲 |
-| `src/desktop_subtitle/text_utils.py` | `src/subtitle_app/core/text_postprocess.py` | 文本提取与后处理 |
-| `src/desktop_subtitle/text_utils.py` | `src/subtitle_app/core/subtitle_pipeline.py` | 增量文本合并 |
-| `src/desktop_subtitle/constants.py` | `src/subtitle_app/core/models.py` | 模式与稳定标识 |
-| `src/desktop_subtitle/constants.py` | `src/subtitle_app/core/settings.py` | 默认产品设置 |
-| `src/desktop_subtitle/config.py` | `src/subtitle_app/core/settings.py` | 设置模型定义逐步迁移 |
-| `src/desktop_subtitle/ui/overlay.py` | `src/subtitle_app/presentation/model.py` | 展示状态模型抽离 |
-| `src/desktop_subtitle/ui/overlay.py` | `src/subtitle_app/presentation/qt/overlay_window.py` | Qt 字幕窗口 |
-| `src/desktop_subtitle/ui/control_panel.py` | `src/subtitle_app/presentation/qt/settings_window.py` | 设置页 |
-| `src/desktop_subtitle/ui/tray.py` | `src/subtitle_app/presentation/qt/tray_controller.py` | 托盘控制 |
-| `src/desktop_subtitle/signals.py` | `src/subtitle_app/presentation/controller.py` 或 `src/subtitle_app/presentation/qt/*` | 视最终事件机制而定 |
+| `src/app.py` | `src/app/bootstrap.py` | 对象装配 |
+| `src/app.py` | `src/app/application.py` | 生命周期与退出控制 |
+| `src/asr.py` | `src/recognition/engine.py` | 兼容入口最终收敛到门面 |
+| `src/audio.py` | `src/recognition/audio_source.py` | 音频输入与缓冲 |
+| `src/text_utils.py` | `src/core/text_postprocess.py` | 文本提取与后处理 |
+| `src/text_utils.py` | `src/core/subtitle_pipeline.py` | 增量文本合并 |
+| `src/constants.py` | `src/core/models.py` | 模式与稳定标识 |
+| `src/constants.py` | `src/core/settings.py` | 默认产品设置 |
+| `src/config.py` | `src/core/settings.py` | 设置模型定义逐步迁移 |
+| `src/presentation/model.py` | `src/presentation/model.py` | 通用展示模型继续扩充 |
+| `src/ui/overlay.py` | `src/presentation/qt/overlay_window.py` | Qt 字幕窗口 |
+| `src/ui/control_panel.py` | `src/presentation/qt/settings_window.py` | 设置页 |
+| `src/ui/tray.py` | `src/presentation/qt/tray_controller.py` | 托盘控制 |
+| `src/signals.py` | `src/presentation/controller.py` 或 `src/presentation/qt/*` | 视最终事件机制而定 |
 
 ## 重构时的判断标准
 
@@ -377,5 +351,4 @@ src/
 
 ## 一句话执行策略
 
-这次重构不追求一步到位，而是以目标目录为收敛方向，先停止上帝类继续膨胀，再按“识别层 -> 展示层 -> 装配层 -> 包名”的顺序持续迁移。
-
+这次重构不追求一步到位，而是以目标目录为收敛方向，先停止上帝类继续膨胀，再按“识别层 -> 展示层 -> 装配层 -> 配置与入口”的顺序持续迁移。

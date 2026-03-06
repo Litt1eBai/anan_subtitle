@@ -1,5 +1,5 @@
-x: 1472
-y: 376
+x: 1414
+y: 401
 width: 541
 height: 648
 lock_size_to_bg: true
@@ -11,7 +11,7 @@ text_color: '#000000'
 text_x: 109
 text_y: 436
 text_width: 300
-text_height: 189
+text_height: 183
 text_max_lines: 4
 text_anim_enable: true
 text_anim_duration_ms: 220
@@ -22,7 +22,7 @@ bg_image: base.png
 bg_width: 0
 bg_height: 0
 bg_offset_x: 0
-bg_offset_y: 0
+bg_offset_y: -13
 show_control_panel: false
 tray_icon_enable: true
 device: null
@@ -39,9 +39,14 @@ chunk_size:
 - 5
 encoder_chunk_look_back: 4
 decoder_chunk_look_back: 1
-model: paraformer-zh-streaming
+model: paraformer-zh
+detector_model: paraformer-zh-streaming
 vad_model: fsmn-vad
 punc_model: ct-punc
 disable_vad_model: false
 disable_punc_model: false
 windowed_mode: true
+model_profile: offline
+model_profile_prompt_on_first_run: true
+model_profile_prompted: true
+model_download_on_startup: false

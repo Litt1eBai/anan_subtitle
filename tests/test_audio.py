@@ -3,7 +3,7 @@ import unittest
 
 import numpy as np
 
-from desktop_subtitle.audio import build_audio_callback
+from audio import build_audio_callback
 
 
 class AudioCallbackTests(unittest.TestCase):

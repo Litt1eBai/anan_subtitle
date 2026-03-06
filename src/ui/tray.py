@@ -5,9 +5,9 @@ from PySide6.QtCore import Qt, QObject
 from PySide6.QtGui import QAction, QColor, QFont, QPainter, QPixmap, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from ..config import write_overlay_settings_to_config
-from .control_panel import OverlayControlPanel
-from .overlay import SubtitleOverlay
+from config import write_overlay_settings_to_config
+from ui.control_panel import OverlayControlPanel
+from ui.overlay import SubtitleOverlay
 
 def build_tray_icon(image_path: str) -> QIcon:
     if image_path:

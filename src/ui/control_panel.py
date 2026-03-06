@@ -19,8 +19,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..config import parse_model_profile, write_config_values
-from ..constants import (
+from config import parse_model_profile, write_config_values
+from constants import (
     MODEL_PROFILE_CUSTOM,
     MODEL_PROFILE_HYBRID,
     MODEL_PROFILE_OFFLINE,
@@ -28,7 +28,7 @@ from ..constants import (
     MODEL_PROFILE_REALTIME,
     OVERLAY_PERSIST_KEYS,
 )
-from .overlay import SubtitleOverlay
+from ui.overlay import SubtitleOverlay
 
 class OverlayControlPanel(QWidget):
     visibility_changed = Signal(bool)

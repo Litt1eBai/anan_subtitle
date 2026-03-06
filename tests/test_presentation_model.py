@@ -1,6 +1,6 @@
 import unittest
 
-from desktop_subtitle.presentation.model import (
+from presentation.model import (
     OverlayRuntimeSettings,
     SubtitleStyleSpec,
     SubtitleViewState,

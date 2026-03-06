@@ -6,7 +6,7 @@ from typing import Any
 
 import yaml
 
-from .constants import (
+from constants import (
     DEFAULT_CONFIG,
     DEFAULT_CONFIG_PATH,
     DEFAULT_CONFIG_TEMPLATE_PATH,

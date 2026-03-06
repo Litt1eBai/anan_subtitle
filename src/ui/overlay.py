@@ -5,7 +5,7 @@ from PySide6.QtCore import QPoint, QRect, Qt, QTimer, QElapsedTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPixmap, QLinearGradient, QPen, QBrush, QCloseEvent
 from PySide6.QtWidgets import QWidget
 
-from ..presentation.model import OverlayRuntimeSettings, SubtitleStyleSpec, SubtitleViewState
+from presentation.model import OverlayRuntimeSettings, SubtitleStyleSpec, SubtitleViewState
 
 
 class SubtitleOverlay(QWidget):

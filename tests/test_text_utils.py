@@ -1,6 +1,6 @@
 import unittest
 
-from desktop_subtitle.text_utils import (
+from text_utils import (
     extract_text,
     merge_incremental_text,
     replace_sentence_initial_wo,

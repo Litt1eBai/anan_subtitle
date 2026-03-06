@@ -1,8 +1,8 @@
 import argparse
 import unittest
 
-from desktop_subtitle.asr import ASRWorker as LegacyASRWorker
-from desktop_subtitle.recognition.engine import ASRWorker, resolve_worker_mode
+from asr import ASRWorker as LegacyASRWorker
+from recognition.engine import ASRWorker, resolve_worker_mode
 
 
 class ResolveWorkerModeTests(unittest.TestCase):

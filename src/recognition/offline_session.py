@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 if TYPE_CHECKING:
-    from .engine import ASRWorker
+    from recognition.engine import ASRWorker
 
 LOGGER = logging.getLogger("desktop_subtitle")
 
