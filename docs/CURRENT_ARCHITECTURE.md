@@ -21,6 +21,8 @@
 - `recognition/audio_source.py` 负责麦克风音频回调与队列写入
 - `audio.py` 作为兼容转发层保留旧导入路径
 - `config.py/constants.py` 负责配置模型、参数解析和持久化
+- `core/text_postprocess.py` 和 `core/subtitle_pipeline.py` 已承载文本提取、后处理与增量合并
+- `text_utils.py` 作为兼容转发层保留旧导入路径
 - `presentation/model.py` 负责通用展示状态模型
 - `presentation/controller.py` 负责识别事件到展示状态的收口
 - `presentation/styles/` 已提供默认样式预设和样式注册表骨架
@@ -42,7 +44,10 @@ src/
   config.py                       # 配置读写、参数解析、配置校验
   constants.py                    # 默认配置和持久化 key 常量
   signals.py                      # Qt 跨模块信号定义
-  text_utils.py                   # 文本提取与增量合并等纯逻辑
+  text_utils.py                   # 兼容转发层
+  core/
+    text_postprocess.py           # 文本提取与后处理
+    subtitle_pipeline.py          # 增量字幕拼接
   app/
     __init__.py                   # 包入口，导出 main
     bootstrap.py                  # 对象装配与启动准备
@@ -171,4 +176,3 @@ src/
 
 - 目标架构：[ARCHITECTURE.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/ARCHITECTURE.md)
 - 重构映射：[REFACTOR_MAPPING.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/REFACTOR_MAPPING.md)
-

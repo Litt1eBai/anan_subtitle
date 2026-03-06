@@ -15,6 +15,9 @@ src/
   constants.py
   signals.py
   text_utils.py
+  core/
+    text_postprocess.py
+    subtitle_pipeline.py
   app/
     __init__.py
     bootstrap.py
@@ -183,7 +186,9 @@ src/
 
 当前文件：
 
-- `src/text_utils.py`
+- `src/core/text_postprocess.py`
+- `src/core/subtitle_pipeline.py`
+- `src/text_utils.py`（兼容转发）
 - `src/constants.py`
 - `src/config.py`
 
@@ -196,10 +201,14 @@ src/
 
 迁移建议：
 
-- `text_utils.py -> text_postprocess.py + subtitle_pipeline.py`
-  - `extract_text` 归入 `text_postprocess.py`
-  - `replace_sentence_initial_wo` 归入 `text_postprocess.py`
-  - `merge_incremental_text` 归入 `subtitle_pipeline.py`
+- `core/text_postprocess.py`
+  - 已承载 `extract_text` 与 `replace_sentence_initial_wo`
+
+- `core/subtitle_pipeline.py`
+  - 已承载 `merge_incremental_text`
+
+- `text_utils.py`
+  - 仅保留兼容转发，不再承载新逻辑
 
 - `constants.py`
   - 默认配置与产品设置定义迁移到 `settings.py`

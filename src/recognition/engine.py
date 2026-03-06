@@ -10,7 +10,7 @@ import numpy as np
 
 from constants import MODEL_PROFILE_HYBRID
 from signals import AppSignals
-from text_utils import extract_text, replace_sentence_initial_wo
+from core.text_postprocess import extract_text, replace_sentence_initial_wo
 from recognition.offline_session import run_offline_session
 from recognition.realtime_session import run_hybrid_session, run_streaming_session
 

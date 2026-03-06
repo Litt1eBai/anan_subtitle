@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from text_utils import merge_incremental_text
+from core.subtitle_pipeline import merge_incremental_text
 
 if TYPE_CHECKING:
     from recognition.engine import ASRWorker
