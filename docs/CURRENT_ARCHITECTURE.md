@@ -19,6 +19,7 @@
 - `presentation/controller.py` 负责识别事件到展示状态的收口
 - `ui/overlay.py` 负责字幕窗口、绘制、动画和 Qt 事件桥接
 - `ui/overlay_interaction.py` 负责文本框编辑命中与缩放几何逻辑
+- `ui/overlay_renderer.py` 负责字幕文本、动画和编辑辅助线绘制
 - `ui/control_panel.py` 负责设置面板
 - `ui/tray.py` 负责系统托盘
 
@@ -43,6 +44,7 @@ src/
     controller.py                 # 展示状态协调器
   ui/
     overlay.py                    # 字幕覆盖层绘制和交互
+    overlay_renderer.py           # 绘制辅助
     control_panel.py              # 设置面板 UI（含模型组合切换/下载）
     tray.py                       # 托盘图标和菜单控制
 ```
