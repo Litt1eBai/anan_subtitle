@@ -1,10 +1,23 @@
 import argparse
 from pathlib import Path
+import shutil
+import sys
 from typing import Any
 
 import yaml
 
-from .constants import DEFAULT_CONFIG, DEFAULT_CONFIG_PATH, OVERLAY_PERSIST_KEYS
+from .constants import (
+    DEFAULT_CONFIG,
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_CONFIG_TEMPLATE_PATH,
+    MODEL_PROFILE_CUSTOM,
+    MODEL_PROFILE_HYBRID,
+    MODEL_PROFILE_OFFLINE,
+    MODEL_PROFILE_PRESETS,
+    MODEL_PROFILE_REALTIME,
+    OVERLAY_PERSIST_KEYS,
+)
+
 
 def parse_chunk_size(chunk_size: Any) -> list[int]:
     if isinstance(chunk_size, (list, tuple)):
@@ -20,6 +33,75 @@ def parse_chunk_size(chunk_size: Any) -> list[int]:
     if values[1] <= 0:
         raise ValueError("chunk-size second value must be > 0")
     return values
+
+
+MODEL_PROFILE_CHOICES = (
+    MODEL_PROFILE_REALTIME,
+    MODEL_PROFILE_OFFLINE,
+    MODEL_PROFILE_HYBRID,
+    MODEL_PROFILE_CUSTOM,
+)
+
+
+def parse_model_profile(profile: Any) -> str:
+    normalized = str(profile).strip().lower()
+    if normalized not in MODEL_PROFILE_CHOICES:
+        joined = ", ".join(MODEL_PROFILE_CHOICES)
+        raise ValueError(f"Invalid model_profile '{profile}', expected one of: {joined}")
+    return normalized
+
+
+def resolve_runtime_config_path(path: str | Path) -> Path:
+    return Path(path).expanduser().resolve()
+
+
+def resolve_default_template_path() -> Path:
+    return Path(DEFAULT_CONFIG_TEMPLATE_PATH).expanduser().resolve()
+
+
+def is_template_config_path(path: str | Path) -> bool:
+    resolved = resolve_runtime_config_path(path)
+    return resolved == resolve_default_template_path()
+
+
+def ensure_runtime_config_path(path: str | Path) -> Path:
+    resolved = resolve_runtime_config_path(path)
+    if is_template_config_path(resolved):
+        raise ValueError(
+            "config/default.yaml is a read-only template. Use config/app.yaml or another runtime config path."
+        )
+    return resolved
+
+
+def apply_model_profile_to_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    profile = parse_model_profile(settings.get("model_profile", MODEL_PROFILE_REALTIME))
+    settings["model_profile"] = profile
+    if profile == MODEL_PROFILE_CUSTOM:
+        return settings
+
+    preset = MODEL_PROFILE_PRESETS[profile]
+    settings["model"] = preset["model"]
+    settings["detector_model"] = preset.get("detector_model", settings.get("detector_model", preset["model"]))
+    settings["vad_model"] = preset["vad_model"]
+    settings["punc_model"] = preset["punc_model"]
+    settings["disable_vad_model"] = preset["disable_vad_model"]
+    settings["disable_punc_model"] = preset["disable_punc_model"]
+    return settings
+
+
+def apply_model_profile_to_args(args: argparse.Namespace) -> None:
+    profile = parse_model_profile(getattr(args, "model_profile", MODEL_PROFILE_REALTIME))
+    args.model_profile = profile
+    if profile == MODEL_PROFILE_CUSTOM:
+        return
+    preset = MODEL_PROFILE_PRESETS[profile]
+    args.model = str(preset["model"])
+    args.detector_model = str(preset.get("detector_model", preset["model"]))
+    args.vad_model = str(preset["vad_model"])
+    args.punc_model = str(preset["punc_model"])
+    args.disable_vad_model = bool(preset["disable_vad_model"])
+    args.disable_punc_model = bool(preset["disable_punc_model"])
+
 
 def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     unknown = sorted(set(raw.keys()) - set(DEFAULT_CONFIG.keys()))
@@ -64,8 +146,20 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         "text_anim_enable",
         "disable_vad_model",
         "disable_punc_model",
+        "model_profile_prompt_on_first_run",
+        "model_profile_prompted",
+        "model_download_on_startup",
     }
-    str_fields = {"font_family", "text_color", "bg_image", "model", "vad_model", "punc_model"}
+    str_fields = {
+        "font_family",
+        "text_color",
+        "bg_image",
+        "model",
+        "detector_model",
+        "vad_model",
+        "punc_model",
+        "model_profile",
+    }
 
     def parse_bool(value: Any) -> bool:
         if isinstance(value, bool):
@@ -90,6 +184,8 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
             normalized[key] = int(value)
         elif key in float_fields:
             normalized[key] = float(value)
+        elif key == "model_profile":
+            normalized[key] = parse_model_profile(value)
         elif key in bool_fields:
             normalized[key] = parse_bool(value)
         elif key in str_fields:
@@ -97,6 +193,7 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         else:
             normalized[key] = value
     return normalized
+
 
 def load_config_from_file(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -109,14 +206,17 @@ def load_config_from_file(path: Path) -> dict[str, Any]:
         raise ValueError("Config file must be a YAML mapping object.")
     return normalize_config(loaded)
 
+
 def write_default_config(path: Path) -> None:
+    path = resolve_runtime_config_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    template_path = Path("config/default.yaml")
+    template_path = resolve_default_template_path()
     if template_path.exists():
-        path.write_text(template_path.read_text(encoding="utf-8"), encoding="utf-8")
+        shutil.copyfile(template_path, path)
         return
     with path.open("w", encoding="utf-8") as file:
         yaml.safe_dump(DEFAULT_CONFIG, file, sort_keys=False, allow_unicode=False)
+
 
 def parse_args() -> argparse.Namespace:
     bootstrap = argparse.ArgumentParser(add_help=False)
@@ -129,12 +229,25 @@ def parse_args() -> argparse.Namespace:
     )
     bootstrap_args, _ = bootstrap.parse_known_args()
 
-    config_path = Path(bootstrap_args.config).expanduser()
+    config_path = ensure_runtime_config_path(bootstrap_args.config)
     defaults = dict(DEFAULT_CONFIG)
+    loaded_from_file: dict[str, Any] = {}
     try:
-        defaults.update(load_config_from_file(config_path))
+        loaded_from_file = load_config_from_file(config_path)
+        defaults.update(loaded_from_file)
     except Exception as exc:  # pylint: disable=broad-except
         raise ValueError(f"Failed to load config file {config_path}: {exc}") from exc
+
+    if (
+        config_path.exists()
+        and "model_profile" not in loaded_from_file
+        and any(
+            key in loaded_from_file
+            for key in ("model", "vad_model", "punc_model", "disable_vad_model", "disable_punc_model")
+        )
+    ):
+        defaults["model_profile"] = MODEL_PROFILE_CUSTOM
+    defaults = apply_model_profile_to_settings(defaults)
 
     parser = argparse.ArgumentParser(description="Desktop subtitle overlay based on FunASR.")
     parser.add_argument("--config", type=str, default=str(config_path))
@@ -276,8 +389,47 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument("--model", type=str, default=defaults["model"])
+    parser.add_argument("--detector-model", type=str, default=defaults["detector_model"])
     parser.add_argument("--vad-model", type=str, default=defaults["vad_model"])
     parser.add_argument("--punc-model", type=str, default=defaults["punc_model"])
+    parser.add_argument(
+        "--model-profile",
+        type=parse_model_profile,
+        choices=MODEL_PROFILE_CHOICES,
+        default=defaults["model_profile"],
+        help="model combo preset: realtime, offline, hybrid, custom",
+    )
+
+    model_download_group = parser.add_mutually_exclusive_group()
+    model_download_group.add_argument(
+        "--model-download-on-startup",
+        dest="model_download_on_startup",
+        action="store_true",
+        help="pre-download selected model combo when application starts",
+    )
+    model_download_group.add_argument(
+        "--no-model-download-on-startup",
+        dest="model_download_on_startup",
+        action="store_false",
+        help="do not pre-download model combo on startup",
+    )
+    parser.set_defaults(model_download_on_startup=defaults["model_download_on_startup"])
+
+    model_prompt_group = parser.add_mutually_exclusive_group()
+    model_prompt_group.add_argument(
+        "--prompt-model-profile",
+        dest="model_profile_prompt_on_first_run",
+        action="store_true",
+        help="prompt model profile selection on first launch",
+    )
+    model_prompt_group.add_argument(
+        "--no-prompt-model-profile",
+        dest="model_profile_prompt_on_first_run",
+        action="store_false",
+        help="disable first-launch model profile prompt",
+    )
+    parser.set_defaults(model_profile_prompt_on_first_run=defaults["model_profile_prompt_on_first_run"])
+    parser.set_defaults(model_profile_prompted=defaults["model_profile_prompted"])
 
     vad_group = parser.add_mutually_exclusive_group()
     vad_group.add_argument("--disable-vad-model", dest="disable_vad_model", action="store_true")
@@ -297,7 +449,27 @@ def parse_args() -> argparse.Namespace:
     if args.dump_default_config:
         write_default_config(Path(args.dump_default_config).expanduser())
         raise SystemExit(0)
+    cli_flags = set(sys.argv[1:])
+    has_model_override = any(
+        flag in cli_flags
+        for flag in (
+            "--model",
+            "--detector-model",
+            "--vad-model",
+            "--punc-model",
+            "--disable-vad-model",
+            "--enable-vad-model",
+            "--disable-punc-model",
+            "--enable-punc-model",
+        )
+    )
+    has_profile_override = "--model-profile" in cli_flags
+    if has_model_override and not has_profile_override:
+        args.model_profile = MODEL_PROFILE_CUSTOM
+    apply_model_profile_to_args(args)
+    args.config = str(config_path)
     return args
+
 
 def ensure_valid_image(path: str, config_path: Path) -> str:
     normalized = path.strip()
@@ -328,8 +500,9 @@ def ensure_valid_image(path: str, config_path: Path) -> str:
         print(f"[WARN] bg image not found, tried: {tried}")
     return ""
 
-def write_overlay_settings_to_config(config_path: Path, settings: dict[str, Any]) -> None:
-    config_path = config_path.expanduser().resolve()
+
+def write_config_values(config_path: Path, updates: dict[str, Any]) -> None:
+    config_path = ensure_runtime_config_path(config_path)
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
     current: dict[str, Any] = {}
@@ -343,9 +516,16 @@ def write_overlay_settings_to_config(config_path: Path, settings: dict[str, Any]
         else:
             raise ValueError("Config file must be a YAML mapping object.")
 
-    for key in OVERLAY_PERSIST_KEYS:
-        if key in settings:
-            current[key] = settings[key]
+    for key, value in updates.items():
+        current[key] = value
 
     with config_path.open("w", encoding="utf-8") as file:
         yaml.safe_dump(current, file, sort_keys=False, allow_unicode=True)
+
+
+def write_overlay_settings_to_config(config_path: Path, settings: dict[str, Any]) -> None:
+    overlay_updates: dict[str, Any] = {}
+    for key in OVERLAY_PERSIST_KEYS:
+        if key in settings:
+            overlay_updates[key] = settings[key]
+    write_config_values(config_path, overlay_updates)

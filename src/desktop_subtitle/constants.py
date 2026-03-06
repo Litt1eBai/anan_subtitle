@@ -1,6 +1,43 @@
 from typing import Any
 
-DEFAULT_CONFIG_PATH = "config/app.yaml"
+DEFAULT_CONFIG_DIR = "config"
+DEFAULT_CONFIG_FILENAME = "app.yaml"
+DEFAULT_CONFIG_TEMPLATE_FILENAME = "default.yaml"
+DEFAULT_CONFIG_PATH = f"{DEFAULT_CONFIG_DIR}/{DEFAULT_CONFIG_FILENAME}"
+DEFAULT_CONFIG_TEMPLATE_PATH = f"{DEFAULT_CONFIG_DIR}/{DEFAULT_CONFIG_TEMPLATE_FILENAME}"
+MODEL_PROFILE_REALTIME = "realtime"
+MODEL_PROFILE_OFFLINE = "offline"
+MODEL_PROFILE_HYBRID = "hybrid"
+MODEL_PROFILE_CUSTOM = "custom"
+MODEL_PROFILE_PRESETS: dict[str, dict[str, Any]] = {
+    MODEL_PROFILE_REALTIME: {
+        "label": "实时",
+        "model": "paraformer-zh-streaming",
+        "detector_model": "paraformer-zh-streaming",
+        "vad_model": "fsmn-vad",
+        "punc_model": "ct-punc",
+        "disable_vad_model": True,
+        "disable_punc_model": True,
+    },
+    MODEL_PROFILE_OFFLINE: {
+        "label": "非实时",
+        "model": "paraformer-zh",
+        "detector_model": "paraformer-zh-streaming",
+        "vad_model": "fsmn-vad",
+        "punc_model": "ct-punc",
+        "disable_vad_model": False,
+        "disable_punc_model": False,
+    },
+    MODEL_PROFILE_HYBRID: {
+        "label": "混合",
+        "model": "paraformer-zh",
+        "detector_model": "paraformer-zh-streaming",
+        "vad_model": "fsmn-vad",
+        "punc_model": "ct-punc",
+        "disable_vad_model": False,
+        "disable_punc_model": False,
+    },
+}
 OVERLAY_PERSIST_KEYS = {
     "x",
     "y",
@@ -58,7 +95,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "chunk_size": [0, 10, 5],
     "encoder_chunk_look_back": 4,
     "decoder_chunk_look_back": 1,
+    "model_profile": MODEL_PROFILE_REALTIME,
+    "model_profile_prompt_on_first_run": True,
+    "model_profile_prompted": False,
+    "model_download_on_startup": False,
     "model": "paraformer-zh-streaming",
+    "detector_model": "paraformer-zh-streaming",
     "vad_model": "fsmn-vad",
     "punc_model": "ct-punc",
     "disable_vad_model": False,

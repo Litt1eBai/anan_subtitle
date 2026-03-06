@@ -7,11 +7,19 @@ from pathlib import Path
 from desktop_subtitle.config import (
     apply_model_profile_to_args,
     apply_model_profile_to_settings,
+    ensure_runtime_config_path,
     ensure_valid_image,
+    is_template_config_path,
     normalize_config,
     parse_chunk_size,
+    resolve_runtime_config_path,
+    write_config_values,
 )
-from desktop_subtitle.constants import MODEL_PROFILE_OFFLINE, MODEL_PROFILE_REALTIME
+from desktop_subtitle.constants import (
+    DEFAULT_CONFIG_TEMPLATE_PATH,
+    MODEL_PROFILE_OFFLINE,
+    MODEL_PROFILE_REALTIME,
+)
 
 
 class ParseChunkSizeTests(unittest.TestCase):
@@ -80,6 +88,18 @@ class ModelProfileTests(unittest.TestCase):
         self.assertIs(args.disable_punc_model, True)
 
 
+class RuntimeConfigPathTests(unittest.TestCase):
+    def test_template_path_is_detected(self) -> None:
+        self.assertTrue(is_template_config_path(DEFAULT_CONFIG_TEMPLATE_PATH))
+
+    def test_resolve_runtime_config_path_returns_absolute_path(self) -> None:
+        self.assertTrue(resolve_runtime_config_path("config/app.yaml").is_absolute())
+
+    def test_ensure_runtime_config_path_rejects_template(self) -> None:
+        with self.assertRaises(ValueError):
+            ensure_runtime_config_path(DEFAULT_CONFIG_TEMPLATE_PATH)
+
+
 class EnsureValidImageTests(unittest.TestCase):
     def test_ensure_valid_image_finds_relative_path_next_to_config(self) -> None:
         tmpdir = Path("tests") / ("tmp_" + uuid.uuid4().hex)
@@ -96,6 +116,12 @@ class EnsureValidImageTests(unittest.TestCase):
             self.assertEqual(resolved, str(image_path.resolve()))
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+class WriteConfigValuesTests(unittest.TestCase):
+    def test_write_config_values_rejects_template_path(self) -> None:
+        with self.assertRaises(ValueError):
+            write_config_values(Path(DEFAULT_CONFIG_TEMPLATE_PATH), {"x": 1})
 
 
 if __name__ == "__main__":
