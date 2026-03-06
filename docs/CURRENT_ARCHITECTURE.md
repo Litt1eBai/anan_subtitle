@@ -17,7 +17,8 @@
 - `config.py/constants.py` 负责配置模型、参数解析和持久化
 - `presentation/model.py` 负责通用展示状态模型
 - `presentation/controller.py` 负责识别事件到展示状态的收口
-- `ui/overlay.py` 负责字幕窗口、绘制、动画、交互
+- `ui/overlay.py` 负责字幕窗口、绘制、动画和 Qt 事件桥接
+- `ui/overlay_interaction.py` 负责文本框编辑命中与缩放几何逻辑
 - `ui/control_panel.py` 负责设置面板
 - `ui/tray.py` 负责系统托盘
 

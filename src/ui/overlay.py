@@ -6,6 +6,7 @@ from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPixmap, QLinea
 from PySide6.QtWidgets import QWidget
 
 from presentation.model import OverlayRuntimeSettings, SubtitleStyleSpec, SubtitleViewState
+from ui.overlay_interaction import build_text_handle_rects, hit_test_text_interaction, resize_text_rect
 
 
 class SubtitleOverlay(QWidget):
@@ -385,7 +386,7 @@ class SubtitleOverlay(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRect(text_rect)
 
-        for handle_rect in self._build_text_handle_rects(text_rect).values():
+        for handle_rect in build_text_handle_rects(text_rect, self._handle_size).values():
             painter.fillRect(handle_rect, QColor(0, 220, 255, 200))
             painter.drawRect(handle_rect)
 
@@ -476,84 +477,23 @@ class SubtitleOverlay(QWidget):
             max(1, min(text_h, available_h)),
         )
 
-    def _build_text_handle_rects(self, text_rect: QRect) -> dict[str, QRect]:
-        half = self._handle_size // 2
-        cx = text_rect.center().x()
-        cy = text_rect.center().y()
-        left = text_rect.left()
-        right = text_rect.right()
-        top = text_rect.top()
-        bottom = text_rect.bottom()
-        return {
-            "top_left": QRect(left - half, top - half, self._handle_size, self._handle_size),
-            "top": QRect(cx - half, top - half, self._handle_size, self._handle_size),
-            "top_right": QRect(right - half, top - half, self._handle_size, self._handle_size),
-            "right": QRect(right - half, cy - half, self._handle_size, self._handle_size),
-            "bottom_right": QRect(right - half, bottom - half, self._handle_size, self._handle_size),
-            "bottom": QRect(cx - half, bottom - half, self._handle_size, self._handle_size),
-            "bottom_left": QRect(left - half, bottom - half, self._handle_size, self._handle_size),
-            "left": QRect(left - half, cy - half, self._handle_size, self._handle_size),
-        }
 
     def _hit_test_text_interaction(self, position: QPoint, text_rect: QRect) -> str | None:
-        for name, handle in self._build_text_handle_rects(text_rect).items():
-            if handle.contains(position):
-                return name
-        if text_rect.contains(position):
-            return "move"
-        return None
+        return hit_test_text_interaction(position, text_rect, self._handle_size)
 
     def _apply_text_resize_delta(self, handle: str, delta: QPoint) -> None:
         if self._drag_start_text_rect is None:
             return
 
-        start = self._drag_start_text_rect
-        left = start.left()
-        right = start.right()
-        top = start.top()
-        bottom = start.bottom()
-        dx = delta.x()
-        dy = delta.y()
-
-        if handle in {"left", "top_left", "bottom_left"}:
-            left += dx
-        if handle in {"right", "top_right", "bottom_right"}:
-            right += dx
-        if handle in {"top", "top_left", "top_right"}:
-            top += dy
-        if handle in {"bottom", "bottom_left", "bottom_right"}:
-            bottom += dy
-
-        overlay_right = max(0, self.width() - 1)
-        overlay_bottom = max(0, self.height() - 1)
-        left = max(0, min(left, overlay_right))
-        right = max(0, min(right, overlay_right))
-        top = max(0, min(top, overlay_bottom))
-        bottom = max(0, min(bottom, overlay_bottom))
-
-        if left > right:
-            left, right = right, left
-        if top > bottom:
-            top, bottom = bottom, top
-
-        min_w = self._min_text_box_size
-        min_h = self._min_text_box_size
-        if right - left + 1 < min_w:
-            if handle in {"right", "top_right", "bottom_right"}:
-                right = min(overlay_right, left + min_w - 1)
-                left = max(0, right - min_w + 1)
-            else:
-                left = max(0, right - min_w + 1)
-                right = min(overlay_right, left + min_w - 1)
-        if bottom - top + 1 < min_h:
-            if handle in {"bottom", "bottom_left", "bottom_right"}:
-                bottom = min(overlay_bottom, top + min_h - 1)
-                top = max(0, bottom - min_h + 1)
-            else:
-                top = max(0, bottom - min_h + 1)
-                bottom = min(overlay_bottom, top + min_h - 1)
-
-        self.set_text_box(left, top, right - left + 1, bottom - top + 1)
+        next_rect = resize_text_rect(
+            start_rect=self._drag_start_text_rect,
+            handle=handle,
+            delta=delta,
+            overlay_width=self.width(),
+            overlay_height=self.height(),
+            min_box_size=self._min_text_box_size,
+        )
+        self.set_text_box(next_rect.x(), next_rect.y(), next_rect.width(), next_rect.height())
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() != Qt.MouseButton.LeftButton:

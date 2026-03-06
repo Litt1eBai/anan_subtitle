@@ -200,6 +200,7 @@ src/
 - `src/presentation/model.py`
 - `src/presentation/controller.py`
 - `src/ui/overlay.py`
+- `src/ui/overlay_interaction.py`
 - `src/ui/control_panel.py`
 - `src/ui/tray.py`
 - `src/signals.py`
