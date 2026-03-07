@@ -17,7 +17,7 @@
 - `core/settings.py` 负责默认配置、模型预设、CLI 参数解析、YAML 读写和配置归一化
 - `core/text_postprocess.py` 和 `core/subtitle_pipeline.py` 负责文本提取、后处理与增量合并
 - `recognition/` 负责音频输入、识别线程门面和实时/非实时识别 session
-- `presentation/model.py` 负责通用展示状态模型
+- `presentation/model.py` 负责通用展示状态模型与运行时设置归一化
 - `presentation/controller.py` 负责识别事件到展示状态的收口
 - `presentation/styles/` 提供默认样式预设和样式注册表
 - `presentation/qt/` 负责 Qt 窗口、绘制、交互、设置面板和托盘实现

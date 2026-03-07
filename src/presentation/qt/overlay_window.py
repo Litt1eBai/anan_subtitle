@@ -5,7 +5,18 @@ from PySide6.QtCore import QPoint, QRect, Qt, QTimer, QElapsedTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QCloseEvent, QPainter, QPixmap
 from PySide6.QtWidgets import QWidget
 
-from presentation.model import OverlayRuntimeSettings, SubtitleStyleSpec, SubtitleViewState
+from presentation.model import (
+    OverlayRuntimeSettings,
+    SubtitleStyleSpec,
+    SubtitleViewState,
+    resolve_bg_draw_size,
+    resolve_text_box,
+    set_runtime_bg_offset,
+    set_runtime_bg_size,
+    set_runtime_flag,
+    set_runtime_font_size,
+    set_runtime_text_box,
+)
 from presentation.styles import DEFAULT_STYLE_ID, get_style
 from presentation.qt.overlay_interaction import (
     OverlayDragState,
@@ -147,10 +158,10 @@ class SubtitleOverlay(QWidget):
         self.update()
 
     def set_stay_on_top(self, enabled: bool) -> None:
-        target = bool(enabled)
-        if self._runtime_settings.stay_on_top == target:
+        updated = set_runtime_flag(self._runtime_settings, field_name="stay_on_top", value=enabled)
+        if updated is None:
             return
-        self._runtime_settings.stay_on_top = target
+        self._runtime_settings = updated
         geometry = self.geometry()
         was_visible = self.isVisible()
         self._apply_window_flags()
@@ -160,10 +171,10 @@ class SubtitleOverlay(QWidget):
         self._emit_settings_changed()
 
     def set_windowed_mode(self, enabled: bool) -> None:
-        target = bool(enabled)
-        if self._runtime_settings.windowed_mode == target:
+        updated = set_runtime_flag(self._runtime_settings, field_name="windowed_mode", value=enabled)
+        if updated is None:
             return
-        self._runtime_settings.windowed_mode = target
+        self._runtime_settings = updated
         geometry = self.geometry()
         was_visible = self.isVisible()
         self._apply_window_flags()
@@ -174,67 +185,60 @@ class SubtitleOverlay(QWidget):
         self._emit_settings_changed()
 
     def set_font_size(self, size: int) -> None:
-        target = max(8, int(size))
-        if self._font.pointSize() == target:
+        updated = set_runtime_font_size(self._runtime_settings, size)
+        if updated is None:
             return
-        self._style_spec.font_size = target
-        self._runtime_settings.font_size = target
-        self._font = QFont(self._font.family(), target)
+        self._runtime_settings = updated
+        self._style_spec.font_size = updated.font_size
+        self._font = QFont(self._font.family(), updated.font_size)
         self.update()
         self._emit_settings_changed()
 
     def set_bg_offset(self, offset_x: int, offset_y: int) -> None:
-        next_x = int(offset_x)
-        next_y = int(offset_y)
-        if self._runtime_settings.bg_offset_x == next_x and self._runtime_settings.bg_offset_y == next_y:
+        updated = set_runtime_bg_offset(self._runtime_settings, offset_x, offset_y)
+        if updated is None:
             return
-        self._runtime_settings.bg_offset_x = next_x
-        self._runtime_settings.bg_offset_y = next_y
+        self._runtime_settings = updated
         self.update()
         self._emit_settings_changed()
 
     def set_bg_size(self, width: int, height: int) -> None:
-        next_w = max(0, int(width))
-        next_h = max(0, int(height))
-        if self._runtime_settings.bg_width == next_w and self._runtime_settings.bg_height == next_h:
+        updated = set_runtime_bg_size(
+            self._runtime_settings,
+            width,
+            height,
+            lock_size_to_bg=self._lock_size_to_bg,
+            bg_native_width=self._bg_pixmap.width(),
+            bg_native_height=self._bg_pixmap.height(),
+        )
+        if updated is None:
             return
-        self._runtime_settings.bg_width = next_w
-        self._runtime_settings.bg_height = next_h
+        self._runtime_settings = updated
         if self._lock_size_to_bg and not self._bg_pixmap.isNull():
-            draw_w, draw_h = self._resolved_bg_size()
-            self.resize(draw_w, draw_h)
-            self._runtime_settings.width = draw_w
-            self._runtime_settings.height = draw_h
+            self.resize(updated.width, updated.height)
         self.update()
         self._emit_settings_changed()
 
     def _resolved_bg_size(self) -> tuple[int, int]:
-        if self._bg_pixmap.isNull():
-            return 0, 0
-        draw_w = self._runtime_settings.bg_width if self._runtime_settings.bg_width > 0 else self._bg_pixmap.width()
-        draw_h = self._runtime_settings.bg_height if self._runtime_settings.bg_height > 0 else self._bg_pixmap.height()
-        return max(1, draw_w), max(1, draw_h)
-
+        return resolve_bg_draw_size(
+            self._runtime_settings,
+            bg_native_width=self._bg_pixmap.width(),
+            bg_native_height=self._bg_pixmap.height(),
+        )
 
     def set_text_box(self, x: int, y: int, width: int, height: int) -> None:
-        overlay_width = max(1, self.width())
-        overlay_height = max(1, self.height())
-        safe_w = max(1, min(int(width), overlay_width))
-        safe_h = max(1, min(int(height), overlay_height))
-        safe_x = max(0, min(int(x), overlay_width - safe_w))
-        safe_y = max(0, min(int(y), overlay_height - safe_h))
-
-        if (
-            self._runtime_settings.text_x == safe_x
-            and self._runtime_settings.text_y == safe_y
-            and self._runtime_settings.text_width == safe_w
-            and self._runtime_settings.text_height == safe_h
-        ):
+        updated = set_runtime_text_box(
+            self._runtime_settings,
+            x=x,
+            y=y,
+            width=width,
+            height=height,
+            overlay_width=self.width(),
+            overlay_height=self.height(),
+        )
+        if updated is None:
             return
-        self._runtime_settings.text_x = safe_x
-        self._runtime_settings.text_y = safe_y
-        self._runtime_settings.text_width = safe_w
-        self._runtime_settings.text_height = safe_h
+        self._runtime_settings = updated
         self.update()
         self._emit_settings_changed()
 
@@ -375,24 +379,12 @@ class SubtitleOverlay(QWidget):
         )
 
     def _build_text_rect(self) -> QRect:
-        rect = self.rect()
-        max_x = max(0, rect.width() - 1)
-        max_y = max(0, rect.height() - 1)
-        text_x = min(self._runtime_settings.text_x, max_x)
-        text_y = min(self._runtime_settings.text_y, max_y)
-
-        available_w = max(1, rect.width() - text_x)
-        available_h = max(1, rect.height() - text_y)
-        text_w = self._runtime_settings.text_width if self._runtime_settings.text_width > 0 else available_w
-        text_h = self._runtime_settings.text_height if self._runtime_settings.text_height > 0 else available_h
-
-        return QRect(
-            text_x,
-            text_y,
-            max(1, min(text_w, available_w)),
-            max(1, min(text_h, available_h)),
+        text_x, text_y, text_w, text_h = resolve_text_box(
+            self._runtime_settings,
+            overlay_width=self.width(),
+            overlay_height=self.height(),
         )
-
+        return QRect(text_x, text_y, text_w, text_h)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() != Qt.MouseButton.LeftButton:

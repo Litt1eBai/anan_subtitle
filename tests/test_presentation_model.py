@@ -4,6 +4,14 @@ from presentation.model import (
     OverlayRuntimeSettings,
     SubtitleStyleSpec,
     SubtitleViewState,
+    normalize_text_box,
+    resolve_bg_draw_size,
+    resolve_text_box,
+    set_runtime_bg_offset,
+    set_runtime_bg_size,
+    set_runtime_flag,
+    set_runtime_font_size,
+    set_runtime_text_box,
 )
 
 
@@ -38,26 +46,114 @@ class SubtitleStyleSpecTests(unittest.TestCase):
 
 
 class OverlayRuntimeSettingsTests(unittest.TestCase):
-    def test_to_dict_contains_runtime_layout_fields(self) -> None:
-        settings = OverlayRuntimeSettings(
+    def setUp(self) -> None:
+        self.settings = OverlayRuntimeSettings(
             x=1,
             y=2,
-            width=3,
-            height=4,
+            width=300,
+            height=200,
             windowed_mode=False,
             stay_on_top=True,
             font_size=30,
             text_x=10,
             text_y=20,
-            text_width=300,
-            text_height=100,
-            bg_width=500,
-            bg_height=200,
+            text_width=100,
+            text_height=80,
+            bg_width=0,
+            bg_height=0,
             bg_offset_x=5,
             bg_offset_y=6,
         )
-        self.assertEqual(settings.to_dict()["bg_offset_y"], 6)
-        self.assertEqual(settings.to_dict()["windowed_mode"], False)
+
+    def test_to_dict_contains_runtime_layout_fields(self) -> None:
+        self.assertEqual(self.settings.to_dict()["bg_offset_y"], 6)
+        self.assertEqual(self.settings.to_dict()["windowed_mode"], False)
+
+    def test_set_runtime_flag_returns_updated_copy(self) -> None:
+        updated = set_runtime_flag(self.settings, field_name="windowed_mode", value=True)
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.windowed_mode, True)
+        self.assertEqual(self.settings.windowed_mode, False)
+
+    def test_set_runtime_font_size_clamps_minimum(self) -> None:
+        updated = set_runtime_font_size(self.settings, 3)
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.font_size, 8)
+
+    def test_set_runtime_bg_offset_updates_coordinates(self) -> None:
+        updated = set_runtime_bg_offset(self.settings, 12, 14)
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.bg_offset_x, 12)
+        self.assertEqual(updated.bg_offset_y, 14)
+
+    def test_resolve_bg_draw_size_prefers_native_when_unset(self) -> None:
+        self.assertEqual(
+            resolve_bg_draw_size(self.settings, bg_native_width=640, bg_native_height=360),
+            (640, 360),
+        )
+
+    def test_set_runtime_bg_size_locks_overlay_size_when_requested(self) -> None:
+        updated = set_runtime_bg_size(
+            self.settings,
+            320,
+            180,
+            lock_size_to_bg=True,
+            bg_native_width=640,
+            bg_native_height=360,
+        )
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.bg_width, 320)
+        self.assertEqual(updated.width, 320)
+        self.assertEqual(updated.height, 180)
+
+    def test_normalize_text_box_clamps_to_overlay_bounds(self) -> None:
+        self.assertEqual(
+            normalize_text_box(x=280, y=190, width=50, height=50, overlay_width=300, overlay_height=200),
+            (250, 150, 50, 50),
+        )
+
+    def test_set_runtime_text_box_returns_updated_copy(self) -> None:
+        updated = set_runtime_text_box(
+            self.settings,
+            x=280,
+            y=190,
+            width=50,
+            height=50,
+            overlay_width=300,
+            overlay_height=200,
+        )
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.text_x, 250)
+        self.assertEqual(updated.text_y, 150)
+
+    def test_resolve_text_box_uses_available_space_when_unset(self) -> None:
+        settings = OverlayRuntimeSettings(
+            x=1,
+            y=2,
+            width=300,
+            height=200,
+            windowed_mode=False,
+            stay_on_top=True,
+            font_size=30,
+            text_x=20,
+            text_y=30,
+            text_width=0,
+            text_height=0,
+            bg_width=0,
+            bg_height=0,
+            bg_offset_x=0,
+            bg_offset_y=0,
+        )
+
+        self.assertEqual(
+            resolve_text_box(settings, overlay_width=300, overlay_height=200),
+            (20, 30, 280, 170),
+        )
 
 
 if __name__ == "__main__":
