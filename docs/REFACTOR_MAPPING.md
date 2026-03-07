@@ -116,7 +116,7 @@ src/
 | `src/presentation/styles/registry.py` | `src/presentation/styles/registry.py` | 样式注册表 |
 | `src/presentation/styles/preset_default.py` | `src/presentation/styles/preset_default.py` | 默认样式预设 |
 | `src/presentation/qt/overlay_window.py` | `src/presentation/qt/overlay_window.py` | Qt 字幕窗口 |
-| `src/presentation/qt/overlay_interaction.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 交互几何辅助 |
+| `src/presentation/qt/overlay_interaction.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 交互几何与拖拽状态辅助 |
 | `src/presentation/qt/overlay_renderer.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 绘制辅助 |
 | `src/presentation/qt/settings_window.py` | `src/presentation/qt/settings_window.py` | 设置页 |
 | `src/presentation/qt/tray_controller.py` | `src/presentation/qt/tray_controller.py` | 托盘控制 |

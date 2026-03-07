@@ -7,7 +7,12 @@ from PySide6.QtWidgets import QWidget
 
 from presentation.model import OverlayRuntimeSettings, SubtitleStyleSpec, SubtitleViewState
 from presentation.styles import DEFAULT_STYLE_ID, get_style
-from presentation.qt.overlay_interaction import build_text_handle_rects, hit_test_text_interaction, resize_text_rect
+from presentation.qt.overlay_interaction import (
+    OverlayDragState,
+    begin_overlay_drag,
+    build_text_handle_rects,
+    resolve_overlay_drag_update,
+)
 from presentation.qt.overlay_renderer import (
     build_centered_draw_rect,
     draw_background,
@@ -44,11 +49,7 @@ class SubtitleOverlay(QWidget):
             bg_offset_x=int(args.bg_offset_x),
             bg_offset_y=int(args.bg_offset_y),
         )
-        self._interaction_mode: str | None = None
-        self._drag_origin: QPoint | None = None
-        self._win_origin: QPoint | None = None
-        self._drag_start_text_rect: QRect | None = None
-        self._drag_start_bg_offset: QPoint | None = None
+        self._drag_state = OverlayDragState()
         self._min_text_box_size = 40
         self._handle_size = 10
         self._edit_mode = False
@@ -214,13 +215,6 @@ class SubtitleOverlay(QWidget):
         draw_h = self._runtime_settings.bg_height if self._runtime_settings.bg_height > 0 else self._bg_pixmap.height()
         return max(1, draw_w), max(1, draw_h)
 
-    def _ensure_explicit_text_box(self, text_rect: QRect) -> None:
-        if self._runtime_settings.text_width > 0 and self._runtime_settings.text_height > 0:
-            return
-        self._runtime_settings.text_x = text_rect.x()
-        self._runtime_settings.text_y = text_rect.y()
-        self._runtime_settings.text_width = text_rect.width()
-        self._runtime_settings.text_height = text_rect.height()
 
     def set_text_box(self, x: int, y: int, width: int, height: int) -> None:
         overlay_width = max(1, self.width())
@@ -399,98 +393,53 @@ class SubtitleOverlay(QWidget):
             max(1, min(text_h, available_h)),
         )
 
-    def _hit_test_text_interaction(self, position: QPoint, text_rect: QRect) -> str | None:
-        return hit_test_text_interaction(position, text_rect, self._handle_size)
 
-    def _apply_text_resize_delta(self, handle: str, delta: QPoint) -> None:
-        if self._drag_start_text_rect is None:
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() != Qt.MouseButton.LeftButton:
             return
+        self._drag_state = begin_overlay_drag(
+            global_pos=event.globalPosition().toPoint(),
+            window_origin=self.frameGeometry().topLeft(),
+            local_pos=event.position().toPoint(),
+            edit_mode=self._edit_mode,
+            text_rect=self._build_text_rect(),
+            bg_rect=self._build_bg_rect(),
+            bg_offset=QPoint(self._runtime_settings.bg_offset_x, self._runtime_settings.bg_offset_y),
+            handle_size=self._handle_size,
+        )
 
-        next_rect = resize_text_rect(
-            start_rect=self._drag_start_text_rect,
-            handle=handle,
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if self._drag_state.drag_origin is None or not (event.buttons() & Qt.MouseButton.LeftButton):
+            return
+        delta = event.globalPosition().toPoint() - self._drag_state.drag_origin
+        update = resolve_overlay_drag_update(
+            drag_state=self._drag_state,
             delta=delta,
             overlay_width=self.width(),
             overlay_height=self.height(),
             min_box_size=self._min_text_box_size,
         )
-        self.set_text_box(next_rect.x(), next_rect.y(), next_rect.width(), next_rect.height())
-
-    def mousePressEvent(self, event) -> None:  # noqa: N802
-        if event.button() != Qt.MouseButton.LeftButton:
+        if update is None:
             return
-        self._drag_origin = event.globalPosition().toPoint()
-        self._win_origin = self.frameGeometry().topLeft()
-        self._interaction_mode = "move_window"
-        self._drag_start_text_rect = None
-        self._drag_start_bg_offset = None
-
-        if not self._edit_mode:
+        if update.window_pos is not None:
+            self.move(update.window_pos)
             return
-
-        local_pos = event.position().toPoint()
-        text_rect = self._build_text_rect()
-        interaction = self._hit_test_text_interaction(local_pos, text_rect)
-        if interaction is not None:
-            self._ensure_explicit_text_box(text_rect)
-            self._drag_start_text_rect = QRect(
-                self._runtime_settings.text_x,
-                self._runtime_settings.text_y,
-                max(1, self._runtime_settings.text_width),
-                max(1, self._runtime_settings.text_height),
-            )
-            self._interaction_mode = f"text_{interaction}"
+        if update.bg_offset is not None:
+            self.set_bg_offset(update.bg_offset.x(), update.bg_offset.y())
             return
-
-        bg_rect = self._build_bg_rect()
-        if not bg_rect.isNull() and bg_rect.contains(local_pos):
-            self._drag_start_bg_offset = QPoint(self._runtime_settings.bg_offset_x, self._runtime_settings.bg_offset_y)
-            self._interaction_mode = "move_bg"
-
-    def mouseMoveEvent(self, event) -> None:  # noqa: N802
-        if (
-            self._drag_origin is None
-            or self._win_origin is None
-            or self._interaction_mode is None
-            or not (event.buttons() & Qt.MouseButton.LeftButton)
-        ):
-            return
-        delta = event.globalPosition().toPoint() - self._drag_origin
-        if self._interaction_mode == "move_window":
-            self.move(self._win_origin + delta)
-            return
-        if self._interaction_mode == "move_bg":
-            if self._drag_start_bg_offset is None:
-                return
-            self.set_bg_offset(
-                self._drag_start_bg_offset.x() + delta.x(),
-                self._drag_start_bg_offset.y() + delta.y(),
-            )
-            return
-        if self._interaction_mode == "text_move":
-            if self._drag_start_text_rect is None:
-                return
-            start = self._drag_start_text_rect
+        if update.text_rect is not None:
             self.set_text_box(
-                start.x() + delta.x(),
-                start.y() + delta.y(),
-                start.width(),
-                start.height(),
+                update.text_rect.x(),
+                update.text_rect.y(),
+                update.text_rect.width(),
+                update.text_rect.height(),
             )
-            return
-        if self._interaction_mode.startswith("text_"):
-            handle = self._interaction_mode.removeprefix("text_")
-            self._apply_text_resize_delta(handle, delta)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         del event
-        if self._interaction_mode == "move_window":
+        if self._drag_state.interaction_mode == "move_window":
             self._emit_settings_changed()
-        self._drag_origin = None
-        self._win_origin = None
-        self._drag_start_text_rect = None
-        self._drag_start_bg_offset = None
-        self._interaction_mode = None
+        self._drag_state = OverlayDragState()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         if event.key() == Qt.Key.Key_Escape:

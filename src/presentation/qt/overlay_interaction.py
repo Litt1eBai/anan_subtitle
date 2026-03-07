@@ -1,4 +1,22 @@
+from dataclasses import dataclass
+
 from PySide6.QtCore import QPoint, QRect
+
+
+@dataclass(frozen=True)
+class OverlayDragState:
+    interaction_mode: str | None = None
+    drag_origin: QPoint | None = None
+    window_origin: QPoint | None = None
+    drag_start_text_rect: QRect | None = None
+    drag_start_bg_offset: QPoint | None = None
+
+
+@dataclass(frozen=True)
+class OverlayDragUpdate:
+    window_pos: QPoint | None = None
+    bg_offset: QPoint | None = None
+    text_rect: QRect | None = None
 
 
 def build_text_handle_rects(text_rect: QRect, handle_size: int) -> dict[str, QRect]:
@@ -82,3 +100,94 @@ def resize_text_rect(
             bottom = min(overlay_bottom, top + min_box_size - 1)
 
     return QRect(left, top, right - left + 1, bottom - top + 1)
+
+
+def begin_overlay_drag(
+    *,
+    global_pos: QPoint,
+    window_origin: QPoint,
+    local_pos: QPoint,
+    edit_mode: bool,
+    text_rect: QRect,
+    bg_rect: QRect,
+    bg_offset: QPoint,
+    handle_size: int,
+) -> OverlayDragState:
+    if not edit_mode:
+        return OverlayDragState(
+            interaction_mode="move_window",
+            drag_origin=global_pos,
+            window_origin=window_origin,
+        )
+
+    interaction = hit_test_text_interaction(local_pos, text_rect, handle_size)
+    if interaction is not None:
+        return OverlayDragState(
+            interaction_mode=f"text_{interaction}",
+            drag_origin=global_pos,
+            window_origin=window_origin,
+            drag_start_text_rect=QRect(text_rect),
+        )
+
+    if not bg_rect.isNull() and bg_rect.contains(local_pos):
+        return OverlayDragState(
+            interaction_mode="move_bg",
+            drag_origin=global_pos,
+            window_origin=window_origin,
+            drag_start_bg_offset=QPoint(bg_offset),
+        )
+
+    return OverlayDragState(
+        interaction_mode="move_window",
+        drag_origin=global_pos,
+        window_origin=window_origin,
+    )
+
+
+def resolve_overlay_drag_update(
+    *,
+    drag_state: OverlayDragState,
+    delta: QPoint,
+    overlay_width: int,
+    overlay_height: int,
+    min_box_size: int,
+) -> OverlayDragUpdate | None:
+    if drag_state.interaction_mode == "move_window":
+        if drag_state.window_origin is None:
+            return None
+        return OverlayDragUpdate(window_pos=drag_state.window_origin + delta)
+
+    if drag_state.interaction_mode == "move_bg":
+        if drag_state.drag_start_bg_offset is None:
+            return None
+        return OverlayDragUpdate(bg_offset=drag_state.drag_start_bg_offset + delta)
+
+    if drag_state.interaction_mode == "text_move":
+        if drag_state.drag_start_text_rect is None:
+            return None
+        start = drag_state.drag_start_text_rect
+        return OverlayDragUpdate(
+            text_rect=QRect(
+                start.x() + delta.x(),
+                start.y() + delta.y(),
+                start.width(),
+                start.height(),
+            )
+        )
+
+    if drag_state.interaction_mode and drag_state.interaction_mode.startswith("text_"):
+        if drag_state.drag_start_text_rect is None:
+            return None
+        handle = drag_state.interaction_mode.removeprefix("text_")
+        return OverlayDragUpdate(
+            text_rect=resize_text_rect(
+                start_rect=drag_state.drag_start_text_rect,
+                handle=handle,
+                delta=delta,
+                overlay_width=overlay_width,
+                overlay_height=overlay_height,
+                min_box_size=min_box_size,
+            )
+        )
+
+    return None

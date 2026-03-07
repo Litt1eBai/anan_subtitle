@@ -51,7 +51,7 @@ src/
       preset_default.py           # 默认样式预设
     qt/
       overlay_window.py           # Qt 字幕窗口实现
-      overlay_interaction.py      # 编辑几何辅助
+      overlay_interaction.py      # 编辑几何与拖拽状态辅助
       overlay_renderer.py         # 绘制辅助
       settings_window.py          # 设置面板 UI（含模型组合切换/下载）
       tray_controller.py          # 托盘图标和菜单控制
