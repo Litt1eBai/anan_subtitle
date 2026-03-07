@@ -199,3 +199,77 @@ def resolve_text_box(
         max(1, min(text_w, available_w)),
         max(1, min(text_h, available_h)),
     )
+
+
+
+def common_prefix_len(previous: str, current: str) -> int:
+    length = min(len(previous), len(current))
+    index = 0
+    while index < length and previous[index] == current[index]:
+        index += 1
+    return index
+
+
+
+def calc_animation_start_progress(previous: str, current: str) -> float:
+    if not previous or not current:
+        return 0.0
+    common = common_prefix_len(previous, current)
+    if common <= 0:
+        return 0.0
+    return min(1.0, common / float(len(current)))
+
+
+
+def set_subtitle_text(
+    view_state: SubtitleViewState,
+    text: str,
+    *,
+    text_anim_enabled: bool,
+) -> SubtitleViewState | None:
+    cleaned = text.strip()
+    if not cleaned:
+        return clear_subtitle_text(view_state)
+    if view_state.subtitle_text == cleaned:
+        return None
+    start_progress = calc_animation_start_progress(view_state.subtitle_text, cleaned) if text_anim_enabled else 1.0
+    return replace(
+        view_state,
+        subtitle_text=cleaned,
+        animation_start_progress=start_progress,
+        animation_progress=start_progress if text_anim_enabled else 1.0,
+    )
+
+
+
+def clear_subtitle_text(view_state: SubtitleViewState) -> SubtitleViewState | None:
+    if not view_state.subtitle_text and view_state.animation_progress == 1.0 and view_state.animation_start_progress == 0.0:
+        return None
+    return replace(
+        view_state,
+        subtitle_text="",
+        animation_progress=1.0,
+        animation_start_progress=0.0,
+    )
+
+
+
+def set_status_text(view_state: SubtitleViewState, text: str) -> SubtitleViewState | None:
+    cleaned = text.strip()
+    if view_state.status_text == cleaned:
+        return None
+    return replace(view_state, status_text=cleaned)
+
+
+
+def advance_animation(
+    view_state: SubtitleViewState,
+    *,
+    elapsed_ms: int,
+    duration_ms: int,
+) -> tuple[SubtitleViewState, bool]:
+    if duration_ms <= 0:
+        return replace(view_state, animation_progress=1.0), True
+    linear = min(1.0, max(0.0, elapsed_ms / float(duration_ms)))
+    progress = view_state.animation_start_progress + (1.0 - view_state.animation_start_progress) * linear
+    return replace(view_state, animation_progress=progress), linear >= 1.0

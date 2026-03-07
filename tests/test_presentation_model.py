@@ -4,6 +4,11 @@ from presentation.model import (
     OverlayRuntimeSettings,
     SubtitleStyleSpec,
     SubtitleViewState,
+    advance_animation,
+    calc_animation_start_progress,
+    clear_subtitle_text,
+    set_status_text,
+    set_subtitle_text,
     normalize_text_box,
     resolve_bg_draw_size,
     resolve_text_box,
@@ -158,3 +163,57 @@ class OverlayRuntimeSettingsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SubtitleStateUpdateTests(unittest.TestCase):
+    def test_calc_animation_start_progress_uses_common_prefix_ratio(self) -> None:
+        self.assertEqual(calc_animation_start_progress("你好世界", "你好世界啊"), 0.8)
+
+    def test_set_subtitle_text_updates_animation_state(self) -> None:
+        state = SubtitleViewState(subtitle_text="你好世界")
+
+        updated = set_subtitle_text(state, "你好世界啊", text_anim_enabled=True)
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.subtitle_text, "你好世界啊")
+        self.assertEqual(updated.animation_start_progress, 0.8)
+        self.assertEqual(updated.animation_progress, 0.8)
+
+    def test_set_subtitle_text_returns_none_when_unchanged(self) -> None:
+        state = SubtitleViewState(subtitle_text="你好")
+
+        self.assertIsNone(set_subtitle_text(state, "你好", text_anim_enabled=True))
+
+    def test_clear_subtitle_text_resets_animation_state(self) -> None:
+        state = SubtitleViewState(subtitle_text="你好", animation_progress=0.5, animation_start_progress=0.3)
+
+        updated = clear_subtitle_text(state)
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.subtitle_text, "")
+        self.assertEqual(updated.animation_progress, 1.0)
+        self.assertEqual(updated.animation_start_progress, 0.0)
+
+    def test_set_status_text_updates_only_when_changed(self) -> None:
+        state = SubtitleViewState(status_text="旧状态")
+
+        updated = set_status_text(state, "新状态")
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.status_text, "新状态")
+
+    def test_advance_animation_completes_when_duration_non_positive(self) -> None:
+        state = SubtitleViewState(animation_progress=0.2, animation_start_progress=0.2)
+
+        updated, finished = advance_animation(state, elapsed_ms=10, duration_ms=0)
+
+        self.assertEqual(updated.animation_progress, 1.0)
+        self.assertTrue(finished)
+
+    def test_advance_animation_interpolates_progress(self) -> None:
+        state = SubtitleViewState(animation_progress=0.0, animation_start_progress=0.25)
+
+        updated, finished = advance_animation(state, elapsed_ms=110, duration_ms=220)
+
+        self.assertAlmostEqual(updated.animation_progress, 0.625)
+        self.assertFalse(finished)

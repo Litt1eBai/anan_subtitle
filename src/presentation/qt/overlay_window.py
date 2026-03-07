@@ -9,6 +9,10 @@ from presentation.model import (
     OverlayRuntimeSettings,
     SubtitleStyleSpec,
     SubtitleViewState,
+    advance_animation,
+    clear_subtitle_text,
+    set_status_text,
+    set_subtitle_text,
     resolve_bg_draw_size,
     resolve_text_box,
     set_runtime_bg_offset,
@@ -243,21 +247,20 @@ class SubtitleOverlay(QWidget):
         self._emit_settings_changed()
 
     def set_subtitle(self, text: str) -> None:
-        cleaned = text.strip()
-        if not cleaned:
-            self.clear_subtitle()
-            return
-        if cleaned == self._view_state.subtitle_text:
-            if self._clear_after_ms > 0:
+        updated = set_subtitle_text(
+            self._view_state,
+            text,
+            text_anim_enabled=self._style_spec.text_anim_enable,
+        )
+        if updated is None:
+            if text.strip() and self._clear_after_ms > 0:
                 self._clear_timer.start(self._clear_after_ms)
             return
-        previous = self._view_state.subtitle_text
-        self._view_state.subtitle_text = cleaned
-        if self._style_spec.text_anim_enable:
-            self._start_text_animation(self._calc_start_progress(previous, cleaned))
+        self._view_state = updated
+        if self._style_spec.text_anim_enable and self._view_state.animation_progress < 1.0:
+            self._start_text_animation(self._view_state.animation_start_progress)
         else:
             self._text_anim_timer.stop()
-            self._view_state.animation_progress = 1.0
         if self._clear_after_ms > 0:
             self._clear_timer.start(self._clear_after_ms)
         else:
@@ -265,21 +268,20 @@ class SubtitleOverlay(QWidget):
         self.update()
 
     def set_status(self, text: str) -> None:
-        cleaned = text.strip()
-        if self._view_state.status_text == cleaned:
+        updated = set_status_text(self._view_state, text)
+        if updated is None:
             return
-        self._view_state.status_text = cleaned
+        self._view_state = updated
         if not self._view_state.subtitle_text:
             self.update()
 
     def clear_subtitle(self) -> None:
         self._clear_timer.stop()
         self._text_anim_timer.stop()
-        self._view_state.animation_progress = 1.0
-        self._view_state.animation_start_progress = 0.0
-        if not self._view_state.subtitle_text:
+        updated = clear_subtitle_text(self._view_state)
+        if updated is None:
             return
-        self._view_state.subtitle_text = ""
+        self._view_state = updated
         self.update()
 
     def _start_text_animation(self, start_progress: float = 0.0) -> None:
@@ -297,35 +299,14 @@ class SubtitleOverlay(QWidget):
         self._text_anim_timer.start()
 
     def _tick_text_animation(self) -> None:
-        if self._style_spec.text_anim_duration_ms <= 0:
-            self._text_anim_timer.stop()
-            self._view_state.animation_progress = 1.0
-            self.update()
-            return
-        elapsed_ms = self._text_anim_clock.elapsed()
-        linear = min(1.0, max(0.0, elapsed_ms / float(self._style_spec.text_anim_duration_ms)))
-        self._view_state.animation_progress = self._view_state.animation_start_progress + (
-            1.0 - self._view_state.animation_start_progress
-        ) * linear
+        self._view_state, finished = advance_animation(
+            self._view_state,
+            elapsed_ms=self._text_anim_clock.elapsed(),
+            duration_ms=self._style_spec.text_anim_duration_ms,
+        )
         self.update()
-        if linear >= 1.0:
+        if finished:
             self._text_anim_timer.stop()
-
-    @staticmethod
-    def _common_prefix_len(a: str, b: str) -> int:
-        length = min(len(a), len(b))
-        index = 0
-        while index < length and a[index] == b[index]:
-            index += 1
-        return index
-
-    def _calc_start_progress(self, previous: str, current: str) -> float:
-        if not previous or not current:
-            return 0.0
-        common = self._common_prefix_len(previous, current)
-        if common <= 0:
-            return 0.0
-        return min(1.0, common / float(len(current)))
 
     def paintEvent(self, event) -> None:  # noqa: N802
         del event

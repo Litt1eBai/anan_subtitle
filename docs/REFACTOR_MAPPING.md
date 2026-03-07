@@ -110,7 +110,7 @@ src/
 | `src/core/settings.py` | `src/core/settings.py` | 默认设置与配置逻辑 |
 | `src/core/text_postprocess.py` | `src/core/text_postprocess.py` | 文本提取与后处理 |
 | `src/core/subtitle_pipeline.py` | `src/core/subtitle_pipeline.py` | 增量文本合并 |
-| `src/presentation/model.py` | `src/presentation/model.py` | 通用展示模型与设置归一化 |
+| `src/presentation/model.py` | `src/presentation/model.py` | 通用展示模型、动画状态与设置归一化 |
 | `src/presentation/controller.py` | `src/presentation/controller.py` | 展示状态与识别事件协调 |
 | `src/presentation/styles/base.py` | `src/presentation/styles/base.py` | 样式接口 |
 | `src/presentation/styles/registry.py` | `src/presentation/styles/registry.py` | 样式注册表 |
