@@ -4,7 +4,7 @@ import unittest
 import uuid
 from pathlib import Path
 
-from config import (
+from core.settings import (
     apply_model_profile_to_args,
     apply_model_profile_to_settings,
     ensure_runtime_config_path,

@@ -9,7 +9,6 @@
 ```text
 src/
   main.py
-  config.py
   signals.py
   core/
     models.py
@@ -95,7 +94,6 @@ src/
 
 - `recognition/engine.py` 仍承担较多线程与模式协调逻辑
 - `presentation/qt/overlay_window.py` 仍承担较多窗口状态和交互逻辑
-- `config.py` 仍保留 CLI 解析与 YAML 读写实现
 
 ## 当前文件到目标文件速查表
 
@@ -123,9 +121,8 @@ src/
 | `src/presentation/qt/overlay_renderer.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 绘制辅助 |
 | `src/presentation/qt/settings_window.py` | `src/presentation/qt/settings_window.py` | 设置页 |
 | `src/presentation/qt/tray_controller.py` | `src/presentation/qt/tray_controller.py` | 托盘控制 |
-| `src/config.py` | `src/core/settings.py` | 保留 CLI 与文件读写，后续可继续收口 |
 | `src/signals.py` | `src/presentation/controller.py` 或 `src/presentation/qt/*` | 视最终事件机制而定 |
 
 ## 一句话结论
 
-主结构迁移已经完成，当前重构进入“局部继续收口复杂模块”的阶段，而不是继续做目录级搬迁。
+主结构迁移与配置入口收口已经完成，当前重构进入“局部继续收口复杂模块”的阶段。

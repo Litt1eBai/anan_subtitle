@@ -14,14 +14,13 @@
 - `app/bootstrap.py` 负责对象装配、首次模型选择和启动准备
 - `app/application.py` 负责应用生命周期与运行主循环
 - `core/models.py` 负责稳定模式标识
-- `core/settings.py` 负责默认配置、模型预设、配置归一化和 profile 逻辑
+- `core/settings.py` 负责默认配置、模型预设、CLI 参数解析、YAML 读写和配置归一化
 - `core/text_postprocess.py` 和 `core/subtitle_pipeline.py` 负责文本提取、后处理与增量合并
 - `recognition/` 负责音频输入、识别线程门面和实时/非实时识别 session
 - `presentation/model.py` 负责通用展示状态模型
 - `presentation/controller.py` 负责识别事件到展示状态的收口
 - `presentation/styles/` 提供默认样式预设和样式注册表
 - `presentation/qt/` 负责 Qt 窗口、绘制、交互、设置面板和托盘实现
-- `config.py` 负责参数解析、配置文件读写和资源路径处理
 - `signals.py` 保留 Qt 信号定义
 
 ## 当前模块结构
@@ -29,7 +28,6 @@
 ```text
 src/
   main.py                         # 启动入口（仅调用 app.main）
-  config.py                       # 配置读写、参数解析、配置校验
   signals.py                      # Qt 跨模块信号定义
   core/
     models.py                     # 稳定模式标识
@@ -63,15 +61,15 @@ src/
 ## 当前依赖方向
 
 - `main.py -> app.application`
-- `app/application.py -> app/bootstrap.py -> config/core/recognition/presentation/signals`
+- `app/application.py -> app/bootstrap.py -> core/recognition/presentation/signals`
 - `recognition/* -> core/* -> signals`
 - `presentation/controller.py -> presentation.model -> presentation/qt/*`
-- `config.py` 不依赖 `presentation/qt/*`、`recognition/*`
+- `core/settings.py` 不依赖 `presentation/qt/*`、`recognition/*`
 
 ## 当前运行流程
 
 1. `main.py` 调用 `app.main()`，包入口再转到 `app/application.py`
-2. `config.parse_args()` 合并默认值、YAML、CLI 参数
+2. `core.settings.parse_args()` 合并默认值、YAML、CLI 参数
 3. 首次运行提示用户选择模型组合，并写回 `config/app.yaml`
 4. 根据配置可选预下载模型组合
 5. `app/bootstrap.py` 创建 `QApplication`、`SubtitleOverlay`、`OverlayControlPanel`、`TrayController`
@@ -101,10 +99,6 @@ src/
 - 剩余展示状态应用
 - 编辑模式交互
 - 窗口显隐事件
-
-### 3. `config.py` 仍保留参数解析与文件读写
-
-稳定配置模型已经收敛到 `core/settings.py`，但 CLI 解析和 YAML 读写仍保留在 `config.py`。
 
 ## 当前仍然有效的约束
 

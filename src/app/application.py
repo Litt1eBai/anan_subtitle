@@ -4,7 +4,7 @@ from pathlib import Path
 import sounddevice as sd
 
 from recognition.audio_source import build_audio_callback
-from config import ensure_valid_image, parse_args
+from core.settings import ensure_valid_image, parse_args
 from app.bootstrap import build_application_context, download_selected_model_combo, prompt_model_profile_on_first_run
 
 LOGGER = logging.getLogger("desktop_subtitle")

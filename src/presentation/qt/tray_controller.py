@@ -5,7 +5,7 @@ from PySide6.QtCore import Qt, QObject
 from PySide6.QtGui import QAction, QColor, QFont, QPainter, QPixmap, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from config import write_overlay_settings_to_config
+from core.settings import write_overlay_settings_to_config
 from presentation.qt.settings_window import OverlayControlPanel
 from presentation.qt.overlay_window import SubtitleOverlay
 

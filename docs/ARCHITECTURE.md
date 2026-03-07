@@ -127,7 +127,7 @@ src/
   - `SubtitleViewState`
   - `StyleId`
 - `settings.py`
-  - 面向产品的配置模型
+  - 面向产品的配置模型`r`n  - CLI 参数解析与 YAML 配置读写
 - `subtitle_pipeline.py`
   - 增量字幕合并
   - 自动清屏策略
@@ -141,7 +141,7 @@ src/
 
 - 不依赖 Qt 类型
 - 不依赖 FunASR 返回结构之外的实现细节
-- 不直接读写配置文件
+- 允许集中承载配置文件读写，但不要把识别或 UI 细节混入其中
 
 ### recognition
 
@@ -393,7 +393,7 @@ Microphone
 4. 收缩装配层
    - 将 `app.py` 收缩到 `app/bootstrap.py + app/application.py`
 
-5. 最后再统一整理配置和目录归属
+5. 最后继续收口复杂模块实现
 
 ## 一句话原则
 
