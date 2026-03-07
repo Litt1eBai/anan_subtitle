@@ -14,7 +14,6 @@ from presentation.model import (
     set_status_text,
     set_subtitle_text,
     resolve_bg_draw_size,
-    resolve_text_box,
     set_runtime_bg_offset,
     set_runtime_bg_size,
     set_runtime_flag,
@@ -22,6 +21,11 @@ from presentation.model import (
     set_runtime_text_box,
 )
 from presentation.styles import DEFAULT_STYLE_ID, get_style
+from presentation.qt.overlay_geometry import (
+    build_overlay_bg_rect,
+    build_overlay_text_rect,
+    export_runtime_settings_snapshot,
+)
 from presentation.qt.overlay_window_behavior import (
     OverlayWindowAction,
     build_overlay_window_flags,
@@ -125,24 +129,11 @@ class SubtitleOverlay(QWidget):
         return SubtitleStyleSpec(**self._style_spec.to_dict())
 
     def export_runtime_settings_model(self) -> OverlayRuntimeSettings:
-        geometry = self.geometry()
-        text_rect = self._build_text_rect()
-        return OverlayRuntimeSettings(
-            x=int(geometry.x()),
-            y=int(geometry.y()),
-            width=int(geometry.width()),
-            height=int(geometry.height()),
-            windowed_mode=bool(self._runtime_settings.windowed_mode),
-            stay_on_top=bool(self._runtime_settings.stay_on_top),
-            font_size=int(self._font.pointSize()),
-            text_x=int(text_rect.x()),
-            text_y=int(text_rect.y()),
-            text_width=int(text_rect.width()),
-            text_height=int(text_rect.height()),
-            bg_width=int(self._runtime_settings.bg_width),
-            bg_height=int(self._runtime_settings.bg_height),
-            bg_offset_x=int(self._runtime_settings.bg_offset_x),
-            bg_offset_y=int(self._runtime_settings.bg_offset_y),
+        return export_runtime_settings_snapshot(
+            geometry=self.geometry(),
+            text_rect=self._build_text_rect(),
+            settings=self._runtime_settings,
+            font_size=self._font.pointSize(),
         )
 
     def export_runtime_settings(self) -> dict[str, Any]:
@@ -354,23 +345,19 @@ class SubtitleOverlay(QWidget):
             )
 
     def _build_bg_rect(self) -> QRect:
-        if self._bg_pixmap.isNull():
-            return QRect()
         draw_w, draw_h = self._resolved_bg_size()
-        return QRect(
-            self._runtime_settings.bg_offset_x,
-            self._runtime_settings.bg_offset_y,
-            draw_w,
-            draw_h,
+        return build_overlay_bg_rect(
+            self._runtime_settings,
+            bg_width=draw_w,
+            bg_height=draw_h,
         )
 
     def _build_text_rect(self) -> QRect:
-        text_x, text_y, text_w, text_h = resolve_text_box(
+        return build_overlay_text_rect(
             self._runtime_settings,
             overlay_width=self.width(),
             overlay_height=self.height(),
         )
-        return QRect(text_x, text_y, text_w, text_h)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() != Qt.MouseButton.LeftButton:
