@@ -127,7 +127,8 @@ src/
   - `SubtitleViewState`
   - `StyleId`
 - `settings.py`
-  - 面向产品的配置模型`r`n  - CLI 参数解析与 YAML 配置读写
+  - 面向产品的配置模型
+  - CLI 参数解析与 YAML 配置读写
 - `subtitle_pipeline.py`
   - 增量字幕合并
   - 自动清屏策略

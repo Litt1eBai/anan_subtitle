@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import argparse
 from collections import deque
 import logging
@@ -13,6 +14,7 @@ from core.text_postprocess import extract_text, replace_sentence_initial_wo
 from recognition.offline_session import run_offline_session
 from recognition.realtime_session import run_hybrid_session, run_streaming_session
 
+
 class SignalChannel(Protocol):
     def emit(self, value: str) -> None: ...
 
@@ -23,7 +25,14 @@ class WorkerSignals(Protocol):
     error: SignalChannel
 
 
+@dataclass(frozen=True)
+class LoadedRecognitionModels:
+    primary_model: Any | None = None
+    detector_model: Any | None = None
+
+
 LOGGER = logging.getLogger("desktop_subtitle")
+
 
 def resolve_worker_mode(args: argparse.Namespace) -> str:
     model_profile = str(getattr(args, "model_profile", "")).strip().lower()
@@ -32,6 +41,49 @@ def resolve_worker_mode(args: argparse.Namespace) -> str:
     if "streaming" in str(args.model):
         return "streaming"
     return "offline"
+
+
+def build_offline_model_kwargs(args: argparse.Namespace, model_name: str) -> dict[str, Any]:
+    model_kwargs: dict[str, Any] = {
+        "model": model_name,
+        "disable_update": True,
+    }
+    if not args.disable_vad_model:
+        model_kwargs["vad_model"] = args.vad_model
+    if not args.disable_punc_model:
+        model_kwargs["punc_model"] = args.punc_model
+    return model_kwargs
+
+
+def load_models_for_worker(worker: "ASRWorker") -> LoadedRecognitionModels:
+    if worker.use_hybrid:
+        return LoadedRecognitionModels(
+            primary_model=worker._load_offline_model(worker.args.model),
+            detector_model=worker._load_streaming_model(worker.detector_model_name),
+        )
+    if worker.use_streaming:
+        return LoadedRecognitionModels(primary_model=worker._load_streaming_model(worker.args.model))
+    return LoadedRecognitionModels(primary_model=worker._load_offline_model(worker.args.model))
+
+
+def run_worker_loop(worker: "ASRWorker", loaded_models: LoadedRecognitionModels) -> None:
+    if worker.use_hybrid:
+        LOGGER.info("Hybrid ASR loop running")
+        run_hybrid_session(worker, loaded_models.detector_model, loaded_models.primary_model)
+        LOGGER.info("Hybrid ASR loop stopped")
+        return
+    if worker.use_streaming:
+        LOGGER.info("Streaming ASR loop running")
+        run_streaming_session(worker, loaded_models.primary_model)
+        LOGGER.info("Streaming ASR loop stopped")
+        return
+    LOGGER.info(
+        "Offline latency probe enabled (summary every %d finalized segments)",
+        worker._offline_report_every,
+    )
+    LOGGER.info("Offline ASR loop running")
+    run_offline_session(worker, loaded_models.primary_model)
+    LOGGER.info("Offline ASR loop stopped")
 
 
 class ASRWorker(threading.Thread):
@@ -77,15 +129,7 @@ class ASRWorker(threading.Thread):
     def _load_offline_model(self, model_name: str) -> Any:
         from funasr import AutoModel
 
-        model_kwargs: dict[str, Any] = {
-            "model": model_name,
-            "disable_update": True,
-        }
-        if not self.args.disable_vad_model:
-            model_kwargs["vad_model"] = self.args.vad_model
-        if not self.args.disable_punc_model:
-            model_kwargs["punc_model"] = self.args.punc_model
-        return AutoModel(**model_kwargs)
+        return AutoModel(**build_offline_model_kwargs(self.args, model_name))
 
     def _transcribe(self, model: Any, audio: np.ndarray) -> str:
         if audio.size == 0:
@@ -203,13 +247,7 @@ class ASRWorker(threading.Thread):
         self.signals.status.emit("模型加载中...")
         LOGGER.info("Loading ASR model...")
         try:
-            if self.use_hybrid:
-                detector_model = self._load_streaming_model(self.detector_model_name)
-                offline_model = self._load_offline_model(self.args.model)
-            elif self.use_streaming:
-                model = self._load_streaming_model(self.args.model)
-            else:
-                model = self._load_offline_model(self.args.model)
+            loaded_models = load_models_for_worker(self)
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.exception("FunASR model init failed")
             self.signals.status.emit("模型加载失败")
@@ -218,20 +256,4 @@ class ASRWorker(threading.Thread):
 
         LOGGER.info("ASR model ready")
         self.signals.status.emit("")
-        if self.use_hybrid:
-            LOGGER.info("Hybrid ASR loop running")
-            run_hybrid_session(self, detector_model, offline_model)
-            LOGGER.info("Hybrid ASR loop stopped")
-            return
-        if self.use_streaming:
-            LOGGER.info("Streaming ASR loop running")
-            run_streaming_session(self, model)
-            LOGGER.info("Streaming ASR loop stopped")
-            return
-        LOGGER.info(
-            "Offline latency probe enabled (summary every %d finalized segments)",
-            self._offline_report_every,
-        )
-        LOGGER.info("Offline ASR loop running")
-        run_offline_session(self, model)
-        LOGGER.info("Offline ASR loop stopped")
+        run_worker_loop(self, loaded_models)

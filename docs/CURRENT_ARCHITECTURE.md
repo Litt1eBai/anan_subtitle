@@ -16,7 +16,7 @@
 - `core/models.py` 负责稳定模式标识
 - `core/settings.py` 负责默认配置、模型预设、CLI 参数解析、YAML 读写和配置归一化
 - `core/text_postprocess.py` 和 `core/subtitle_pipeline.py` 负责文本提取、后处理与增量合并
-- `recognition/` 负责音频输入、识别线程门面和实时/非实时识别 session
+- `recognition/` 负责音频输入、识别线程门面、模型加载分派和实时/非实时识别 session
 - `presentation/model.py` 负责通用展示状态模型、动画状态更新与运行时设置归一化
 - `presentation/controller.py` 负责识别事件到展示状态的收口
 - `presentation/styles/` 提供默认样式预设和样式注册表
@@ -52,7 +52,8 @@ src/
     qt/
       overlay_window.py           # Qt 字幕窗口实现
       overlay_interaction.py      # 编辑几何与拖拽状态辅助
-      overlay_renderer.py         # 绘制辅助`r`n      overlay_window_behavior.py  # 窗口 flags 与关闭动作辅助
+      overlay_renderer.py         # 绘制辅助
+      overlay_window_behavior.py  # 窗口 flags 与关闭动作辅助
       settings_window.py          # 设置面板 UI（含模型组合切换/下载）
       tray_controller.py          # 托盘图标和菜单控制
 ```
@@ -61,7 +62,7 @@ src/
 
 - `main.py -> app.application`
 - `app/application.py -> app/bootstrap.py -> core/recognition/presentation`
-- `recognition/* -> core/* -> signals`
+- `recognition/* -> core/* -> app/bootstrap.py signals bridge`
 - `presentation/controller.py -> presentation.model -> presentation/qt/*`
 - `core/settings.py` 不依赖 `presentation/qt/*`、`recognition/*`
 
@@ -83,7 +84,7 @@ src/
 
 ### 1. `recognition/engine.py` 仍是识别相关的核心协调点
 
-虽然实时和非实时流程已经拆到独立 session，但当前 `engine.py` 仍承担：
+虽然实时和非实时流程已经拆到独立 session，`run()` 也已经收口到 helper 分派，但当前 `engine.py` 仍承担：
 
 - 模型加载与 worker 门面
 - 模式选择
@@ -115,4 +116,3 @@ src/
 
 - 目标架构：[ARCHITECTURE.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/ARCHITECTURE.md)
 - 重构映射：[REFACTOR_MAPPING.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/REFACTOR_MAPPING.md)
-
