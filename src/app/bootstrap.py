@@ -11,7 +11,7 @@ import numpy as np
 from funasr import AutoModel
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from asr import ASRWorker
+from recognition.engine import ASRWorker
 from config import write_config_values
 from core.settings import apply_model_profile_to_args
 from core.models import (

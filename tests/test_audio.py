@@ -3,7 +3,7 @@ import unittest
 
 import numpy as np
 
-from audio import build_audio_callback
+from recognition.audio_source import build_audio_callback
 
 
 class AudioCallbackTests(unittest.TestCase):

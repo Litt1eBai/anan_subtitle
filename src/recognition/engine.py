@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from constants import MODEL_PROFILE_HYBRID
+from core.models import MODEL_PROFILE_HYBRID
 from signals import AppSignals
 from core.text_postprocess import extract_text, replace_sentence_initial_wo
 from recognition.offline_session import run_offline_session

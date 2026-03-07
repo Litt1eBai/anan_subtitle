@@ -15,11 +15,8 @@ from config import (
     resolve_runtime_config_path,
     write_config_values,
 )
-from constants import (
-    DEFAULT_CONFIG_TEMPLATE_PATH,
-    MODEL_PROFILE_OFFLINE,
-    MODEL_PROFILE_REALTIME,
-)
+from core.models import MODEL_PROFILE_OFFLINE, MODEL_PROFILE_REALTIME
+from core.settings import DEFAULT_CONFIG_TEMPLATE_PATH
 
 
 class ParseChunkSizeTests(unittest.TestCase):
