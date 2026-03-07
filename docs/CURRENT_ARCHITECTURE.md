@@ -7,7 +7,7 @@
 
 ## 当前定位
 
-当前项目已经完成主要结构迁移，代码收敛到文档定义的目标目录，旧兼容入口已移除。
+当前项目已经完成主要结构迁移，代码基本收敛到目标目录。现在的重构重点不再是搬目录，而是继续收口少数复杂模块。
 
 当前实现可以概括为：
 
@@ -20,7 +20,7 @@
 - `presentation/model.py` 负责通用展示状态模型、动画状态更新与运行时设置归一化
 - `presentation/controller.py` 负责识别事件到展示状态的收口
 - `presentation/styles/` 提供默认样式预设和样式注册表
-- `presentation/qt/` 负责 Qt 窗口、绘制、交互、设置面板和托盘实现
+- `presentation/qt/` 负责 Qt 窗口、绘制、交互、初始化构造、设置面板和托盘实现
 - `app/bootstrap.py` 内部定义 Qt 信号桥 `AppSignals`
 
 ## 当前模块结构
@@ -51,9 +51,11 @@ src/
       preset_default.py           # 默认样式预设
     qt/
       overlay_window.py           # Qt 字幕窗口实现
+      overlay_window_setup.py     # 窗口初始化构造辅助
       overlay_interaction.py      # 编辑几何与拖拽状态辅助
       overlay_renderer.py         # 绘制辅助
-      overlay_window_behavior.py  # 窗口 flags 与关闭动作辅助`r`n      overlay_geometry.py         # 背景/文本矩形与运行时快照辅助
+      overlay_window_behavior.py  # 窗口 flags 与关闭动作辅助
+      overlay_geometry.py         # 背景/文本矩形与运行时快照辅助
       settings_window.py          # 设置面板 UI（含模型组合切换/下载）
       tray_controller.py          # 托盘图标和菜单控制
 ```
@@ -97,7 +99,7 @@ src/
 
 - QWidget 窗口行为
 - 剩余展示状态应用
-- 编辑模式交互
+- 编辑模式交互与事件转发
 - 窗口显隐事件
 
 ## 当前仍然有效的约束
@@ -106,7 +108,7 @@ src/
 - `presentation/controller.py` 负责识别事件到展示状态的收口
 - `presentation/styles/` 承担样式预设定义
 - Qt 相关绘制和交互只留在 `presentation/qt/*`
-- 新逻辑不再进入已移除的兼容入口层
+- 新逻辑不再回流到已删除的旧入口层
 
 ## 当前文档的用途
 
@@ -116,4 +118,3 @@ src/
 
 - 目标架构：[ARCHITECTURE.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/ARCHITECTURE.md)
 - 重构映射：[REFACTOR_MAPPING.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/REFACTOR_MAPPING.md)
-

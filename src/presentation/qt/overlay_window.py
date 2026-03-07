@@ -2,7 +2,7 @@ import argparse
 from typing import Any
 
 from PySide6.QtCore import QPoint, QRect, Qt, QTimer, QElapsedTimer, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QCloseEvent, QPainter, QPixmap
+from PySide6.QtGui import QFont, QFontMetrics, QCloseEvent, QPainter, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from presentation.model import (
@@ -20,7 +20,6 @@ from presentation.model import (
     set_runtime_font_size,
     set_runtime_text_box,
 )
-from presentation.styles import DEFAULT_STYLE_ID, get_style
 from presentation.qt.overlay_geometry import (
     build_overlay_bg_rect,
     build_overlay_text_rect,
@@ -37,6 +36,12 @@ from presentation.qt.overlay_interaction import (
     begin_overlay_drag,
     build_text_handle_rects,
     resolve_overlay_drag_update,
+)
+from presentation.qt.overlay_window_setup import (
+    build_overlay_runtime_settings,
+    build_overlay_style_spec,
+    build_overlay_text_color,
+    resolve_initial_overlay_size,
 )
 from presentation.qt.overlay_renderer import (
     build_centered_draw_rect,
@@ -55,25 +60,8 @@ class SubtitleOverlay(QWidget):
     def __init__(self, args: argparse.Namespace) -> None:
         super().__init__()
         self._view_state = SubtitleViewState()
-        style = get_style(getattr(args, "subtitle_style", DEFAULT_STYLE_ID))
-        self._style_spec = style.build_spec(args)
-        self._runtime_settings = OverlayRuntimeSettings(
-            x=int(args.x),
-            y=int(args.y),
-            width=max(1, int(args.width)),
-            height=max(1, int(args.height)),
-            windowed_mode=bool(args.windowed_mode),
-            stay_on_top=bool(args.stay_on_top),
-            font_size=self._style_spec.font_size,
-            text_x=max(0, args.text_x),
-            text_y=max(0, args.text_y),
-            text_width=max(0, args.text_width),
-            text_height=max(0, args.text_height),
-            bg_width=max(0, int(args.bg_width)),
-            bg_height=max(0, int(args.bg_height)),
-            bg_offset_x=int(args.bg_offset_x),
-            bg_offset_y=int(args.bg_offset_y),
-        )
+        self._style_spec = build_overlay_style_spec(args)
+        self._runtime_settings = build_overlay_runtime_settings(args, self._style_spec)
         self._drag_state = OverlayDragState()
         self._min_text_box_size = 40
         self._handle_size = 10
@@ -90,17 +78,17 @@ class SubtitleOverlay(QWidget):
         self._text_anim_timer = QTimer(self)
         self._text_anim_timer.setInterval(16)
         self._text_anim_timer.timeout.connect(self._tick_text_animation)
-        self._text_color = QColor(self._style_spec.text_color)
-        if not self._text_color.isValid():
-            self._text_color = QColor(0, 0, 0)
+        self._text_color = build_overlay_text_color(self._style_spec.text_color)
 
         self.setWindowTitle("Desktop Subtitle")
-        overlay_width = self._runtime_settings.width
-        overlay_height = self._runtime_settings.height
-        if self._lock_size_to_bg and not self._bg_pixmap.isNull():
-            overlay_width, overlay_height = self._resolved_bg_size()
-            self._runtime_settings.width = overlay_width
-            self._runtime_settings.height = overlay_height
+        overlay_width, overlay_height = resolve_initial_overlay_size(
+            self._runtime_settings,
+            lock_size_to_bg=self._lock_size_to_bg,
+            bg_native_width=self._bg_pixmap.width(),
+            bg_native_height=self._bg_pixmap.height(),
+        )
+        self._runtime_settings.width = overlay_width
+        self._runtime_settings.height = overlay_height
         self.setGeometry(self._runtime_settings.x, self._runtime_settings.y, overlay_width, overlay_height)
         self._apply_window_flags()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)

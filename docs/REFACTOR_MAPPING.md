@@ -32,8 +32,11 @@ src/
       preset_default.py
     qt/
       overlay_window.py
+      overlay_window_setup.py
       overlay_interaction.py
       overlay_renderer.py
+      overlay_window_behavior.py
+      overlay_geometry.py
       settings_window.py
       tray_controller.py
 ```
@@ -116,6 +119,7 @@ src/
 | `src/presentation/styles/registry.py` | `src/presentation/styles/registry.py` | 样式注册表 |
 | `src/presentation/styles/preset_default.py` | `src/presentation/styles/preset_default.py` | 默认样式预设 |
 | `src/presentation/qt/overlay_window.py` | `src/presentation/qt/overlay_window.py` | Qt 字幕窗口 |
+| `src/presentation/qt/overlay_window_setup.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 初始化参数解释与样式/运行时构造辅助 |
 | `src/presentation/qt/overlay_interaction.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 交互几何与拖拽状态辅助 |
 | `src/presentation/qt/overlay_renderer.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 绘制辅助 |
 | `src/presentation/qt/overlay_window_behavior.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 窗口 flags 与关闭动作辅助 |
@@ -126,4 +130,3 @@ src/
 ## 一句话结论
 
 主结构迁移、配置入口收口和顶层信号桥下沉已经完成，当前重构进入“局部继续收口复杂模块”的阶段。
-
