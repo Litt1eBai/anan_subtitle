@@ -118,8 +118,8 @@ src/
 | `src/presentation/qt/overlay_window.py` | `src/presentation/qt/overlay_window.py` | Qt 字幕窗口 |
 | `src/presentation/qt/overlay_interaction.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 交互几何与拖拽状态辅助 |
 | `src/presentation/qt/overlay_renderer.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 绘制辅助 |
-| src/presentation/qt/overlay_window_behavior.py | src/presentation/qt/overlay_window.py 周边辅助 | 窗口 flags 与关闭动作辅助 |
-| src/presentation/qt/overlay_geometry.py | src/presentation/qt/overlay_window.py 周边辅助 | 背景/文本矩形与运行时快照辅助 |
+| `src/presentation/qt/overlay_window_behavior.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 窗口 flags 与关闭动作辅助 |
+| `src/presentation/qt/overlay_geometry.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 背景/文本矩形与运行时快照辅助 |
 | `src/presentation/qt/settings_window.py` | `src/presentation/qt/settings_window.py` | 设置页 |
 | `src/presentation/qt/tray_controller.py` | `src/presentation/qt/tray_controller.py` | 托盘控制 |
 
