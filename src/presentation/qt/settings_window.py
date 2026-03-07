@@ -19,7 +19,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config import parse_model_profile, write_config_values
+from config import write_config_values
+from core.settings import parse_model_profile
 from core.models import (
     MODEL_PROFILE_CUSTOM,
     MODEL_PROFILE_HYBRID,

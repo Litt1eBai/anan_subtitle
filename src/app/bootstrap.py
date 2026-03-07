@@ -12,7 +12,8 @@ from funasr import AutoModel
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from asr import ASRWorker
-from config import apply_model_profile_to_args, write_config_values
+from config import write_config_values
+from core.settings import apply_model_profile_to_args
 from core.models import (
     MODEL_PROFILE_CUSTOM,
     MODEL_PROFILE_HYBRID,
