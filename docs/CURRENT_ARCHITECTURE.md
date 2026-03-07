@@ -20,7 +20,9 @@
 - `recognition/` 负责识别线程门面和实时/非实时识别 session
 - `recognition/audio_source.py` 负责麦克风音频回调与队列写入
 - `audio.py` 作为兼容转发层保留旧导入路径
-- `config.py/constants.py` 负责配置模型、参数解析和持久化
+- `core/models.py` 负责稳定模式标识
+- `core/settings.py` 负责默认配置、模型预设和持久化 key
+- `constants.py` 作为兼容转发层保留旧导入路径
 - `core/text_postprocess.py` 和 `core/subtitle_pipeline.py` 已承载文本提取、后处理与增量合并
 - `text_utils.py` 作为兼容转发层保留旧导入路径
 - `presentation/model.py` 负责通用展示状态模型
@@ -42,10 +44,12 @@ src/
   asr.py                          # 兼容入口，转发到 recognition.engine
   audio.py                        # 兼容转发层
   config.py                       # 配置读写、参数解析、配置校验
-  constants.py                    # 默认配置和持久化 key 常量
+  constants.py                    # 兼容转发层
   signals.py                      # Qt 跨模块信号定义
   text_utils.py                   # 兼容转发层
   core/
+    models.py                     # 稳定模式标识
+    settings.py                   # 默认配置与模型预设
     text_postprocess.py           # 文本提取与后处理
     subtitle_pipeline.py          # 增量字幕拼接
   app/

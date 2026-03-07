@@ -6,18 +6,20 @@ from typing import Any
 
 import yaml
 
-from constants import (
-    DEFAULT_CONFIG,
-    DEFAULT_CONFIG_PATH,
-    DEFAULT_CONFIG_TEMPLATE_PATH,
+from core.models import (
+    MODEL_PROFILE_CHOICES,
     MODEL_PROFILE_CUSTOM,
     MODEL_PROFILE_HYBRID,
     MODEL_PROFILE_OFFLINE,
-    MODEL_PROFILE_PRESETS,
     MODEL_PROFILE_REALTIME,
+)
+from core.settings import (
+    DEFAULT_CONFIG,
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_CONFIG_TEMPLATE_PATH,
+    MODEL_PROFILE_PRESETS,
     OVERLAY_PERSIST_KEYS,
 )
-
 
 def parse_chunk_size(chunk_size: Any) -> list[int]:
     if isinstance(chunk_size, (list, tuple)):
@@ -34,13 +36,6 @@ def parse_chunk_size(chunk_size: Any) -> list[int]:
         raise ValueError("chunk-size second value must be > 0")
     return values
 
-
-MODEL_PROFILE_CHOICES = (
-    MODEL_PROFILE_REALTIME,
-    MODEL_PROFILE_OFFLINE,
-    MODEL_PROFILE_HYBRID,
-    MODEL_PROFILE_CUSTOM,
-)
 
 
 def parse_model_profile(profile: Any) -> str:

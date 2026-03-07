@@ -13,13 +13,13 @@ from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from asr import ASRWorker
 from config import apply_model_profile_to_args, write_config_values
-from constants import (
+from core.models import (
     MODEL_PROFILE_CUSTOM,
     MODEL_PROFILE_HYBRID,
     MODEL_PROFILE_OFFLINE,
-    MODEL_PROFILE_PRESETS,
     MODEL_PROFILE_REALTIME,
 )
+from core.settings import MODEL_PROFILE_PRESETS
 from presentation import SubtitlePresentationController
 from presentation.qt import OverlayControlPanel, SubtitleOverlay, TrayController
 from signals import AppSignals

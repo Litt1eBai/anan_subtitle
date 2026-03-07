@@ -16,6 +16,8 @@ src/
   signals.py
   text_utils.py
   core/
+    models.py
+    settings.py
     text_postprocess.py
     subtitle_pipeline.py
   app/
@@ -186,10 +188,12 @@ src/
 
 当前文件：
 
+- `src/core/models.py`
+- `src/core/settings.py`
 - `src/core/text_postprocess.py`
 - `src/core/subtitle_pipeline.py`
+- `src/constants.py`（兼容转发）
 - `src/text_utils.py`（兼容转发）
-- `src/constants.py`
 - `src/config.py`
 
 目标文件：
@@ -201,29 +205,25 @@ src/
 
 迁移建议：
 
+- `core/models.py`
+  - 已承载稳定模式标识和 profile choice 常量
+
+- `core/settings.py`
+  - 已承载默认配置、模型预设和持久化 key
+
 - `core/text_postprocess.py`
   - 已承载 `extract_text` 与 `replace_sentence_initial_wo`
 
 - `core/subtitle_pipeline.py`
   - 已承载 `merge_incremental_text`
 
-- `text_utils.py`
+- `constants.py` / `text_utils.py`
   - 仅保留兼容转发，不再承载新逻辑
-
-- `constants.py`
-  - 默认配置与产品设置定义迁移到 `settings.py`
-  - 模式常量可迁移到 `models.py`
-  - 与展示样式有关的默认值，后续应逐步迁移到 `presentation/styles`
 
 - `config.py`
   - 参数解析与配置文件读写短期可保留
   - 中期将“配置结构定义”逐步迁移到 `core/settings.py`
   - 长期将“加载/保存”拆回 `app` 或单独配置模块
-
-注意：
-
-- 这一轮重构不要求立刻消灭 `config.py`
-- 先把“设置模型”和“配置加载实现”区分开即可
 
 ### 4. 展示层
 

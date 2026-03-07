@@ -20,14 +20,13 @@ from PySide6.QtWidgets import (
 )
 
 from config import parse_model_profile, write_config_values
-from constants import (
+from core.models import (
     MODEL_PROFILE_CUSTOM,
     MODEL_PROFILE_HYBRID,
     MODEL_PROFILE_OFFLINE,
-    MODEL_PROFILE_PRESETS,
     MODEL_PROFILE_REALTIME,
-    OVERLAY_PERSIST_KEYS,
 )
+from core.settings import MODEL_PROFILE_PRESETS, OVERLAY_PERSIST_KEYS
 from presentation.qt.overlay_window import SubtitleOverlay
 
 class OverlayControlPanel(QWidget):
