@@ -9,6 +9,7 @@ from typing import Any
 
 import numpy as np
 from funasr import AutoModel
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from recognition.engine import ASRWorker
@@ -23,10 +24,14 @@ from core.models import (
 from core.settings import MODEL_PROFILE_PRESETS
 from presentation import SubtitlePresentationController
 from presentation.qt import OverlayControlPanel, SubtitleOverlay, TrayController
-from signals import AppSignals
+
+class AppSignals(QObject):
+    subtitle = Signal(str)
+    status = Signal(str)
+    error = Signal(str)
+
 
 LOGGER = logging.getLogger("desktop_subtitle")
-
 
 @dataclass
 class ApplicationContext:

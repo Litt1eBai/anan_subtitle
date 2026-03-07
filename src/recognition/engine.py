@@ -4,18 +4,26 @@ import logging
 import queue
 import threading
 import time
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
 from core.models import MODEL_PROFILE_HYBRID
-from signals import AppSignals
 from core.text_postprocess import extract_text, replace_sentence_initial_wo
 from recognition.offline_session import run_offline_session
 from recognition.realtime_session import run_hybrid_session, run_streaming_session
 
-LOGGER = logging.getLogger("desktop_subtitle")
+class SignalChannel(Protocol):
+    def emit(self, value: str) -> None: ...
 
+
+class WorkerSignals(Protocol):
+    subtitle: SignalChannel
+    status: SignalChannel
+    error: SignalChannel
+
+
+LOGGER = logging.getLogger("desktop_subtitle")
 
 def resolve_worker_mode(args: argparse.Namespace) -> str:
     model_profile = str(getattr(args, "model_profile", "")).strip().lower()
@@ -31,7 +39,7 @@ class ASRWorker(threading.Thread):
         self,
         args: argparse.Namespace,
         audio_queue: "queue.Queue[np.ndarray]",
-        signals: AppSignals,
+        signals: WorkerSignals,
         stop_event: threading.Event,
     ) -> None:
         super().__init__(daemon=True)

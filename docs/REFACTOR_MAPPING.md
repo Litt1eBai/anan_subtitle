@@ -9,7 +9,6 @@
 ```text
 src/
   main.py
-  signals.py
   core/
     models.py
     settings.py
@@ -121,8 +120,7 @@ src/
 | `src/presentation/qt/overlay_renderer.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 绘制辅助 |
 | `src/presentation/qt/settings_window.py` | `src/presentation/qt/settings_window.py` | 设置页 |
 | `src/presentation/qt/tray_controller.py` | `src/presentation/qt/tray_controller.py` | 托盘控制 |
-| `src/signals.py` | `src/presentation/controller.py` 或 `src/presentation/qt/*` | 视最终事件机制而定 |
 
 ## 一句话结论
 
-主结构迁移与配置入口收口已经完成，当前重构进入“局部继续收口复杂模块”的阶段。
+主结构迁移、配置入口收口和顶层信号桥下沉已经完成，当前重构进入“局部继续收口复杂模块”的阶段。

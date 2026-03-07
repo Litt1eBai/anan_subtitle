@@ -21,14 +21,13 @@
 - `presentation/controller.py` 负责识别事件到展示状态的收口
 - `presentation/styles/` 提供默认样式预设和样式注册表
 - `presentation/qt/` 负责 Qt 窗口、绘制、交互、设置面板和托盘实现
-- `signals.py` 保留 Qt 信号定义
+- `app/bootstrap.py` 内部定义 Qt 信号桥 `AppSignals`
 
 ## 当前模块结构
 
 ```text
 src/
   main.py                         # 启动入口（仅调用 app.main）
-  signals.py                      # Qt 跨模块信号定义
   core/
     models.py                     # 稳定模式标识
     settings.py                   # 默认配置、模型预设与配置逻辑
@@ -61,7 +60,7 @@ src/
 ## 当前依赖方向
 
 - `main.py -> app.application`
-- `app/application.py -> app/bootstrap.py -> core/recognition/presentation/signals`
+- `app/application.py -> app/bootstrap.py -> core/recognition/presentation`
 - `recognition/* -> core/* -> signals`
 - `presentation/controller.py -> presentation.model -> presentation/qt/*`
 - `core/settings.py` 不依赖 `presentation/qt/*`、`recognition/*`
