@@ -52,7 +52,7 @@ src/
     qt/
       overlay_window.py           # Qt 字幕窗口实现
       overlay_interaction.py      # 编辑几何与拖拽状态辅助
-      overlay_renderer.py         # 绘制辅助
+      overlay_renderer.py         # 绘制辅助`r`n      overlay_window_behavior.py  # 窗口 flags 与关闭动作辅助
       settings_window.py          # 设置面板 UI（含模型组合切换/下载）
       tray_controller.py          # 托盘图标和菜单控制
 ```
@@ -115,3 +115,4 @@ src/
 
 - 目标架构：[ARCHITECTURE.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/ARCHITECTURE.md)
 - 重构映射：[REFACTOR_MAPPING.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/REFACTOR_MAPPING.md)
+

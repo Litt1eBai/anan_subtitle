@@ -22,6 +22,12 @@ from presentation.model import (
     set_runtime_text_box,
 )
 from presentation.styles import DEFAULT_STYLE_ID, get_style
+from presentation.qt.overlay_window_behavior import (
+    OverlayWindowAction,
+    build_overlay_window_flags,
+    resolve_close_action,
+    resolve_escape_action,
+)
 from presentation.qt.overlay_interaction import (
     OverlayDragState,
     begin_overlay_drag,
@@ -97,13 +103,12 @@ class SubtitleOverlay(QWidget):
         self.setWindowOpacity(args.opacity)
 
     def _apply_window_flags(self) -> None:
-        if self._runtime_settings.windowed_mode:
-            flags = Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
-        else:
-            flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
-        if self._runtime_settings.stay_on_top:
-            flags |= Qt.WindowType.WindowStaysOnTopHint
-        self.setWindowFlags(flags)
+        self.setWindowFlags(
+            build_overlay_window_flags(
+                windowed_mode=self._runtime_settings.windowed_mode,
+                stay_on_top=self._runtime_settings.stay_on_top,
+            )
+        )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
     def export_view_state(self) -> SubtitleViewState:
@@ -416,10 +421,11 @@ class SubtitleOverlay(QWidget):
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         if event.key() == Qt.Key.Key_Escape:
-            if self._hide_to_tray_on_close:
+            action = resolve_escape_action(hide_to_tray_on_close=self._hide_to_tray_on_close)
+            if action == OverlayWindowAction.HIDE:
                 self.hide()
                 self._emit_settings_changed()
-            else:
+            elif action == OverlayWindowAction.CLOSE:
                 self.close()
             return
         if event.key() == Qt.Key.Key_F2:
@@ -428,7 +434,8 @@ class SubtitleOverlay(QWidget):
         super().keyPressEvent(event)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
-        if self._hide_to_tray_on_close:
+        action = resolve_close_action(hide_to_tray_on_close=self._hide_to_tray_on_close)
+        if action == OverlayWindowAction.HIDE:
             event.ignore()
             self.hide()
             self._emit_settings_changed()
