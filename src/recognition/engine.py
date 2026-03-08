@@ -7,7 +7,10 @@ from typing import Any
 
 import numpy as np
 
-from core.models import MODEL_PROFILE_HYBRID
+from recognition.engine_config import (
+    build_offline_model_kwargs,
+    build_worker_runtime_config,
+)
 from recognition.engine_runtime import (
     OfflineLatencyTracker,
     WorkerSignals,
@@ -26,27 +29,6 @@ class LoadedRecognitionModels:
 
 
 LOGGER = logging.getLogger("desktop_subtitle")
-
-
-def resolve_worker_mode(args: argparse.Namespace) -> str:
-    model_profile = str(getattr(args, "model_profile", "")).strip().lower()
-    if model_profile == MODEL_PROFILE_HYBRID:
-        return "hybrid"
-    if "streaming" in str(args.model):
-        return "streaming"
-    return "offline"
-
-
-def build_offline_model_kwargs(args: argparse.Namespace, model_name: str) -> dict[str, Any]:
-    model_kwargs: dict[str, Any] = {
-        "model": model_name,
-        "disable_update": True,
-    }
-    if not args.disable_vad_model:
-        model_kwargs["vad_model"] = args.vad_model
-    if not args.disable_punc_model:
-        model_kwargs["punc_model"] = args.punc_model
-    return model_kwargs
 
 
 def load_models_for_worker(worker: "ASRWorker") -> LoadedRecognitionModels:
@@ -95,17 +77,19 @@ class ASRWorker(threading.Thread):
         self.audio_queue = audio_queue
         self.signals = signals
         self.stop_event = stop_event
-        self.mode = resolve_worker_mode(args)
-        self.use_hybrid = self.mode == "hybrid"
-        self.use_streaming = self.mode == "streaming"
-        self.detector_model_name = str(getattr(args, "detector_model", "paraformer-zh-streaming"))
-        self.silence_blocks = max(1, int(args.silence_ms / args.block_ms))
-        self.partial_blocks = max(1, int(args.partial_interval_ms / args.block_ms))
-        self.max_segment_samples = int(args.max_segment_seconds * args.samplerate)
-        self.chunk_size = args.chunk_size
-        self.encoder_chunk_look_back = args.encoder_chunk_look_back
-        self.decoder_chunk_look_back = args.decoder_chunk_look_back
-        self.chunk_stride_samples = max(1, int(self.args.samplerate * self.chunk_size[1] * 0.06))
+
+        runtime = build_worker_runtime_config(args)
+        self.mode = runtime.mode
+        self.use_hybrid = runtime.use_hybrid
+        self.use_streaming = runtime.use_streaming
+        self.detector_model_name = runtime.detector_model_name
+        self.silence_blocks = runtime.silence_blocks
+        self.partial_blocks = runtime.partial_blocks
+        self.max_segment_samples = runtime.max_segment_samples
+        self.chunk_size = runtime.chunk_size
+        self.encoder_chunk_look_back = runtime.encoder_chunk_look_back
+        self.decoder_chunk_look_back = runtime.decoder_chunk_look_back
+        self.chunk_stride_samples = runtime.chunk_stride_samples
         self._offline_latency = OfflineLatencyTracker(report_every=5)
 
     def _emit_subtitle(self, text: str) -> None:

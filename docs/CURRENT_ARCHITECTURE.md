@@ -16,7 +16,7 @@
 - `core/models.py` 负责稳定模式标识
 - `core/settings.py` 负责默认配置、模型预设、CLI 参数解析、YAML 读写和配置归一化
 - `core/text_postprocess.py` 和 `core/subtitle_pipeline.py` 负责文本提取、后处理与增量合并
-- `recognition/` 负责音频输入、识别线程门面、模型加载分派、转写辅助和实时/非实时识别 session
+- `recognition/` 负责音频输入、识别线程门面、运行参数归一化、模型加载分派、转写辅助和实时/非实时识别 session
 - `presentation/model.py` 负责通用展示状态模型、动画状态更新与运行时设置归一化
 - `presentation/controller.py` 负责识别事件到展示状态的收口
 - `presentation/styles/` 提供默认样式预设和样式注册表
@@ -40,6 +40,7 @@ src/
   recognition/
     audio_source.py               # 音频输入回调与队列写入
     engine.py                     # ASRWorker 门面与模式分发
+    engine_config.py              # worker 运行参数与离线模型参数辅助
     engine_runtime.py             # 转写调用、字幕输出与离线延迟统计辅助
     realtime_session.py           # 实时识别流程
     offline_session.py            # 非实时识别流程
@@ -82,7 +83,7 @@ src/
 5. `app/bootstrap.py` 创建 `QApplication`、`SubtitleOverlay`、`OverlayControlPanel`、`TrayController`
 6. 创建 `AppSignals`、音频队列和 `recognition.engine.ASRWorker`
 7. `recognition.audio_source.build_audio_callback()` 持续向队列写入音频块
-8. `ASRWorker` 通过 `engine_runtime.py` 执行字幕输出、转写调用和离线延迟统计
+8. `ASRWorker` 通过 `engine_config.py` 归一化运行参数，并通过 `engine_runtime.py` 执行字幕输出、转写调用和离线延迟统计
 9. `recognition.offline_session` 或 `recognition.realtime_session` 处理识别循环
 10. `presentation/controller.py` 接收识别信号并生成展示状态
 11. `presentation/qt/overlay_window.py` 根据展示状态更新字幕或状态
@@ -93,10 +94,9 @@ src/
 
 ### 1. `recognition/engine.py` 仍是识别相关的核心协调点
 
-虽然模型加载分派、转写调用和离线延迟统计都已经下沉到 helper，当前 `engine.py` 仍承担：
+虽然运行参数归一化、模型加载参数构造、转写调用和离线延迟统计都已经下沉到 helper，当前 `engine.py` 仍承担：
 
 - 模型加载与 worker 门面
-- 模式选择
 - 通用线程生命周期
 - 会话切换与共享状态协调
 

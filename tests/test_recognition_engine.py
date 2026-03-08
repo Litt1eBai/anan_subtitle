@@ -8,10 +8,12 @@ import queue
 from recognition.engine import (
     ASRWorker,
     LoadedRecognitionModels,
-    build_offline_model_kwargs,
     load_models_for_worker,
-    resolve_worker_mode,
     run_worker_loop,
+)
+from recognition.engine_config import (
+    build_offline_model_kwargs,
+    resolve_worker_mode,
 )
 
 
@@ -96,7 +98,7 @@ class RunWorkerLoopTests(unittest.TestCase):
         return argparse.Namespace(
             use_hybrid=(mode == "hybrid"),
             use_streaming=(mode == "streaming"),
-            _offline_report_every=5,
+            _offline_latency=argparse.Namespace(report_every=5),
         )
 
     def test_run_worker_loop_dispatches_hybrid(self) -> None:

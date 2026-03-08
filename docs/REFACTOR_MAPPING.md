@@ -21,6 +21,7 @@ src/
   recognition/
     audio_source.py
     engine.py
+    engine_config.py
     engine_runtime.py
     realtime_session.py
     offline_session.py
@@ -99,7 +100,7 @@ src/
 
 ## 仍待继续收口的点
 
-- `recognition/engine.py` 已抽出转写调用和离线延迟统计辅助，但仍承担较多线程与模式协调逻辑
+- `recognition/engine.py` 已抽出运行参数归一化、转写调用和离线延迟统计辅助，但仍承担较多线程与模式协调逻辑
 - `presentation/qt/overlay_window.py` 仍承担较多剩余窗口状态和 Qt 事件逻辑
 - `presentation/qt/settings_window.py` 已抽出模型组合、下载执行和配置保存辅助，但仍承担较多表单装配和配置回填逻辑
 
@@ -113,6 +114,7 @@ src/
 | `src/app/application.py` | `src/app/application.py` | 生命周期与退出控制 |
 | `src/recognition/audio_source.py` | `src/recognition/audio_source.py` | 音频输入与缓冲 |
 | `src/recognition/engine.py` | `src/recognition/engine.py` | 识别门面与线程协调 |
+| `src/recognition/engine_config.py` | `src/recognition/engine.py` 周边辅助 | worker 运行参数与离线模型参数辅助 |
 | `src/recognition/engine_runtime.py` | `src/recognition/engine.py` 周边辅助 | 转写调用、字幕输出与离线延迟统计辅助 |
 | `src/recognition/realtime_session.py` | `src/recognition/realtime_session.py` | 实时识别流程 |
 | `src/recognition/offline_session.py` | `src/recognition/offline_session.py` | 非实时识别流程 |
