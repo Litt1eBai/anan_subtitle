@@ -143,8 +143,8 @@ python src/main.py --config config\app.yaml --model-profile hybrid
 
 但有两点需要单独注意：
 
-- `PySide6` 不是 MIT。你的项目源码可以继续采用 MIT，但如果你后续分发 Windows 二进制或打包版，需要额外遵守 `PySide6/Qt` 的 `LGPL` 要求，例如保留许可证与相关声明，并按其分发条件处理。
-- `FunASR` / `ModelScope` 下载的模型权重、模型卡和相关资源，可能有独立于 Python 包本身的使用条款。发布可执行版本前，建议逐个确认你实际分发或自动下载的模型许可。
+- `PySide6` 不是 MIT。你的项目源码可以继续采用 MIT，但如果你后续分发 Windows 二进制或打包版，需要额外遵守 `PySide6/Qt` 的 `LGPL` 要求；按当前发布约束，后续打包应采用动态链接方式，并随发布包附带 `LGPL` 声明和相关许可文本。
+- `FunASR` / `ModelScope` 下载的模型权重、模型卡和相关资源，可能有独立于 Python 包本身的使用条款。发布可执行版本前，建议逐个确认你实际分发或自动下载的模型许可，并在 README 或发布说明中注明实际使用模型的来源。
 
 ## 开发文档
 
