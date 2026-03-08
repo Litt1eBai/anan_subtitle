@@ -27,9 +27,12 @@ from presentation.qt.overlay_geometry import (
 )
 from presentation.qt.overlay_window_behavior import (
     OverlayWindowAction,
-    build_overlay_window_flags,
     resolve_close_action,
     resolve_escape_action,
+)
+from presentation.qt.overlay_window_shell import (
+    apply_overlay_window_flags,
+    refresh_overlay_window_shell,
 )
 from presentation.qt.overlay_interaction import (
     OverlayDragState,
@@ -95,13 +98,11 @@ class SubtitleOverlay(QWidget):
         self.setWindowOpacity(args.opacity)
 
     def _apply_window_flags(self) -> None:
-        self.setWindowFlags(
-            build_overlay_window_flags(
-                windowed_mode=self._runtime_settings.windowed_mode,
-                stay_on_top=self._runtime_settings.stay_on_top,
-            )
+        apply_overlay_window_flags(
+            self,
+            windowed_mode=self._runtime_settings.windowed_mode,
+            stay_on_top=self._runtime_settings.stay_on_top,
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
     def export_view_state(self) -> SubtitleViewState:
         return SubtitleViewState(**self._view_state.to_dict())
@@ -150,12 +151,14 @@ class SubtitleOverlay(QWidget):
         if updated is None:
             return
         self._runtime_settings = updated
-        geometry = self.geometry()
-        was_visible = self.isVisible()
-        self._apply_window_flags()
-        self.setGeometry(geometry)
-        if was_visible:
-            self.show()
+        refresh_overlay_window_shell(
+            self,
+            windowed_mode=self._runtime_settings.windowed_mode,
+            stay_on_top=self._runtime_settings.stay_on_top,
+            geometry=self.geometry(),
+            was_visible=self.isVisible(),
+            request_update=False,
+        )
         self._emit_settings_changed()
 
     def set_windowed_mode(self, enabled: bool) -> None:
@@ -163,13 +166,14 @@ class SubtitleOverlay(QWidget):
         if updated is None:
             return
         self._runtime_settings = updated
-        geometry = self.geometry()
-        was_visible = self.isVisible()
-        self._apply_window_flags()
-        self.setGeometry(geometry)
-        if was_visible:
-            self.show()
-        self.update()
+        refresh_overlay_window_shell(
+            self,
+            windowed_mode=self._runtime_settings.windowed_mode,
+            stay_on_top=self._runtime_settings.stay_on_top,
+            geometry=self.geometry(),
+            was_visible=self.isVisible(),
+            request_update=True,
+        )
         self._emit_settings_changed()
 
     def set_font_size(self, size: int) -> None:

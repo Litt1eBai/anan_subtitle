@@ -20,7 +20,7 @@
 - `presentation/model.py` 负责通用展示状态模型、动画状态更新与运行时设置归一化
 - `presentation/controller.py` 负责识别事件到展示状态的收口
 - `presentation/styles/` 提供默认样式预设和样式注册表
-- `presentation/qt/` 负责 Qt 窗口、绘制、交互、初始化构造、设置面板和托盘实现
+- `presentation/qt/` 负责 Qt 窗口、绘制、交互、初始化构造、窗口壳层刷新、设置面板和托盘实现
 - `app/bootstrap.py` 内部定义 Qt 信号桥 `AppSignals`
 
 ## 当前模块结构
@@ -52,6 +52,7 @@ src/
     qt/
       overlay_window.py           # Qt 字幕窗口实现
       overlay_window_setup.py     # 窗口初始化构造辅助
+      overlay_window_shell.py     # 窗口 flags 刷新与壳层更新辅助
       overlay_interaction.py      # 编辑几何与拖拽状态辅助
       overlay_renderer.py         # 绘制辅助
       overlay_window_behavior.py  # 窗口 flags 与关闭动作辅助
