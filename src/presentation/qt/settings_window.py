@@ -1,6 +1,5 @@
 from pathlib import Path
 import threading
-import time
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
@@ -19,7 +18,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.settings import write_config_values
 from core.settings import parse_model_profile
 from core.models import (
     MODEL_PROFILE_CUSTOM,
@@ -27,15 +25,18 @@ from core.models import (
     MODEL_PROFILE_OFFLINE,
     MODEL_PROFILE_REALTIME,
 )
-from core.settings import MODEL_PROFILE_PRESETS, OVERLAY_PERSIST_KEYS
 from presentation.qt.overlay_window import SubtitleOverlay
+from presentation.qt.settings_window_actions import (
+    run_model_download_requests,
+    write_settings_config,
+)
 from presentation.qt.settings_window_models import (
-    build_model_config_updates,
     build_model_download_requests,
     build_model_profile_summary,
     build_model_selection_state,
     resolve_model_selection_state,
 )
+
 
 class OverlayControlPanel(QWidget):
     visibility_changed = Signal(bool)
@@ -221,10 +222,6 @@ class OverlayControlPanel(QWidget):
         label.setFont(font)
         return label
 
-    def _profile_display_name(self, profile: str) -> str:
-        if profile in MODEL_PROFILE_PRESETS:
-            return str(MODEL_PROFILE_PRESETS[profile]["label"])
-        return "自定义"
 
     def _current_profile_from_combo(self) -> str:
         data = self._model_profile_combo.currentData()
@@ -287,16 +284,11 @@ class OverlayControlPanel(QWidget):
         self._status_label.setText(f"下载中: {names} ...")
 
         def worker() -> None:
-            start = time.perf_counter()
             try:
-                from funasr import AutoModel
-
-                for kwargs in downloads:
-                    AutoModel(**kwargs)
+                elapsed = run_model_download_requests(downloads)
             except Exception as exc:  # pylint: disable=broad-except
                 self.model_download_finished.emit(False, f"模型下载失败: {exc}")
                 return
-            elapsed = time.perf_counter() - start
             self.model_download_finished.emit(True, f"模型下载完成（{elapsed:.1f}s）")
 
         self._download_thread = threading.Thread(target=worker, daemon=True)
@@ -381,19 +373,15 @@ class OverlayControlPanel(QWidget):
     def _save_to_config(self) -> None:
         try:
             overlay_settings = self._overlay.export_runtime_settings()
-            updates: dict[str, Any] = {
-                key: value for key, value in overlay_settings.items() if key in OVERLAY_PERSIST_KEYS
-            }
             if self._model_profile == MODEL_PROFILE_CUSTOM:
                 self._custom_profile_snapshot = self._model_selection.to_dict()
-            updates.update(
-                build_model_config_updates(
-                    self._model_profile,
-                    model_download_on_startup=self._model_download_on_startup,
-                    selection=self._model_selection,
-                )
+            write_settings_config(
+                self._config_path,
+                overlay_settings,
+                model_profile=self._model_profile,
+                model_download_on_startup=self._model_download_on_startup,
+                selection=self._model_selection,
             )
-            write_config_values(self._config_path, updates)
             self._status_label.setText(f"已保存: {self._config_path}（模型切换需重启生效）")
         except Exception as exc:  # pylint: disable=broad-except
             self._status_label.setText(f"保存失败: {exc}")
@@ -405,3 +393,4 @@ class OverlayControlPanel(QWidget):
     def hideEvent(self, event) -> None:  # noqa: N802
         super().hideEvent(event)
         self.visibility_changed.emit(False)
+

@@ -41,6 +41,7 @@ src/
       overlay_geometry.py
       settings_window.py
       settings_window_models.py
+      settings_window_actions.py
       tray_controller.py
 ```
 
@@ -99,7 +100,7 @@ src/
 
 - `recognition/engine.py` 已收口模型加载与运行分派，但仍承担较多线程与模式协调逻辑
 - `presentation/qt/overlay_window.py` 仍承担较多剩余窗口状态和 Qt 事件逻辑
-- `presentation/qt/settings_window.py` 已抽出模型组合辅助，但仍承担较多表单装配和配置回填逻辑
+- `presentation/qt/settings_window.py` 已抽出模型组合、下载执行和配置保存辅助，但仍承担较多表单装配和配置回填逻辑
 
 ## 当前文件到目标文件速查表
 
@@ -132,6 +133,7 @@ src/
 | `src/presentation/qt/overlay_geometry.py` | `src/presentation/qt/overlay_window.py` 周边辅助 | 背景/文本矩形与运行时快照辅助 |
 | `src/presentation/qt/settings_window.py` | `src/presentation/qt/settings_window.py` | 设置页 |
 | `src/presentation/qt/settings_window_models.py` | `src/presentation/qt/settings_window.py` 周边辅助 | 模型组合状态、摘要、下载请求与配置更新辅助 |
+| `src/presentation/qt/settings_window_actions.py` | `src/presentation/qt/settings_window.py` 周边辅助 | 下载执行与配置保存辅助 |
 | `src/presentation/qt/tray_controller.py` | `src/presentation/qt/tray_controller.py` | 托盘控制 |
 
 ## 一句话结论

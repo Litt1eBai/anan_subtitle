@@ -20,7 +20,7 @@
 - `presentation/model.py` 负责通用展示状态模型、动画状态更新与运行时设置归一化
 - `presentation/controller.py` 负责识别事件到展示状态的收口
 - `presentation/styles/` 提供默认样式预设和样式注册表
-- `presentation/qt/` 负责 Qt 窗口、绘制、交互、初始化构造、窗口壳层刷新、事件辅助、设置面板、模型组合辅助和托盘实现
+- `presentation/qt/` 负责 Qt 窗口、绘制、交互、初始化构造、窗口壳层刷新、事件辅助、设置面板、模型组合辅助、动作辅助和托盘实现
 - `app/bootstrap.py` 内部定义 Qt 信号桥 `AppSignals`
 
 ## 当前模块结构
@@ -60,6 +60,7 @@ src/
       overlay_geometry.py         # 背景/文本矩形与运行时快照辅助
       settings_window.py          # 设置面板 UI（含模型组合切换/下载）
       settings_window_models.py   # 模型组合状态、摘要、下载与配置更新辅助
+      settings_window_actions.py  # 下载执行与配置保存辅助
       tray_controller.py          # 托盘图标和菜单控制
 ```
 
@@ -83,7 +84,7 @@ src/
 8. `ASRWorker` 从队列取数据识别，发出 `subtitle/status/error` 信号
 9. `presentation/controller.py` 接收识别信号并生成展示状态
 10. `presentation/qt/overlay_window.py` 根据展示状态更新字幕或状态
-11. `presentation/qt/settings_window.py` 通过 `settings_window_models.py` 解析模型组合摘要、下载请求和配置更新
+11. `presentation/qt/settings_window.py` 通过 `settings_window_models.py` 和 `settings_window_actions.py` 解析模型组合、执行下载和写回配置
 12. 退出时停止音频流、停止线程并回收托盘资源
 
 ## 当前主要问题
@@ -108,7 +109,7 @@ src/
 
 ### 3. `presentation/qt/settings_window.py` 仍偏重
 
-当前 `settings_window.py` 已把模型组合状态和下载/保存辅助拆到 `settings_window_models.py`，但本体仍承担：
+当前 `settings_window.py` 已把模型组合状态拆到 `settings_window_models.py`，把下载执行和配置保存拆到 `settings_window_actions.py`，但本体仍承担：
 
 - QWidget 表单和信号连接
 - 运行时配置回填与保存
