@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import argparse
 import logging
 import queue
@@ -7,10 +6,8 @@ from typing import Any
 
 import numpy as np
 
-from recognition.engine_config import (
-    build_offline_model_kwargs,
-    build_worker_runtime_config,
-)
+from recognition.engine_config import build_worker_runtime_config
+from recognition.engine_loader import LoadedRecognitionModels, load_models, load_offline_model, load_streaming_model
 from recognition.engine_runtime import (
     OfflineLatencyTracker,
     WorkerSignals,
@@ -22,24 +19,18 @@ from recognition.offline_session import run_offline_session
 from recognition.realtime_session import run_hybrid_session, run_streaming_session
 
 
-@dataclass(frozen=True)
-class LoadedRecognitionModels:
-    primary_model: Any | None = None
-    detector_model: Any | None = None
-
-
 LOGGER = logging.getLogger("desktop_subtitle")
 
 
 def load_models_for_worker(worker: "ASRWorker") -> LoadedRecognitionModels:
-    if worker.use_hybrid:
-        return LoadedRecognitionModels(
-            primary_model=worker._load_offline_model(worker.args.model),
-            detector_model=worker._load_streaming_model(worker.detector_model_name),
-        )
-    if worker.use_streaming:
-        return LoadedRecognitionModels(primary_model=worker._load_streaming_model(worker.args.model))
-    return LoadedRecognitionModels(primary_model=worker._load_offline_model(worker.args.model))
+    return load_models(
+        use_hybrid=worker.use_hybrid,
+        use_streaming=worker.use_streaming,
+        args=worker.args,
+        detector_model_name=worker.detector_model_name,
+        streaming_loader=worker._load_streaming_model,
+        offline_loader=worker._load_offline_model,
+    )
 
 
 def run_worker_loop(worker: "ASRWorker", loaded_models: LoadedRecognitionModels) -> None:
@@ -96,14 +87,10 @@ class ASRWorker(threading.Thread):
         emit_subtitle(self.signals, text)
 
     def _load_streaming_model(self, model_name: str) -> Any:
-        from funasr import AutoModel
+        return load_streaming_model(model_name)
 
-        return AutoModel(model=model_name, disable_update=True)
-
-    def _load_offline_model(self, model_name: str) -> Any:
-        from funasr import AutoModel
-
-        return AutoModel(**build_offline_model_kwargs(self.args, model_name))
+    def _load_offline_model(self, args: Any, model_name: str) -> Any:
+        return load_offline_model(args, model_name)
 
     def _timed_transcribe(self, model: Any, audio: np.ndarray) -> tuple[str, float]:
         return timed_transcribe_offline(

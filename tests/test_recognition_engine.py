@@ -7,7 +7,6 @@ import queue
 
 from recognition.engine import (
     ASRWorker,
-    LoadedRecognitionModels,
     load_models_for_worker,
     run_worker_loop,
 )
@@ -15,6 +14,7 @@ from recognition.engine_config import (
     build_offline_model_kwargs,
     resolve_worker_mode,
 )
+from recognition.engine_loader import LoadedRecognitionModels
 
 
 class ResolveWorkerModeTests(unittest.TestCase):
@@ -82,7 +82,7 @@ class LoadModelsForWorkerTests(unittest.TestCase):
 
         self.assertEqual(loaded, LoadedRecognitionModels(primary_model="offline-model", detector_model="detector-model"))
         load_streaming.assert_called_once_with("detector")
-        load_offline.assert_called_once_with("paraformer-zh")
+        load_offline.assert_called_once_with(worker.args, "paraformer-zh")
 
     def test_load_models_for_streaming_worker(self) -> None:
         worker = self._build_worker("realtime", "paraformer-zh-streaming")
