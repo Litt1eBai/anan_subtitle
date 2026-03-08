@@ -55,7 +55,7 @@ src/
       overlay_window_shell.py     # 窗口 flags 刷新与壳层更新辅助
       overlay_window_events.py    # 键盘/关闭/拖拽释放事件辅助
       overlay_interaction.py      # 编辑几何与拖拽状态辅助
-      overlay_renderer.py         # 绘制辅助
+      overlay_renderer.py         # 绘制与文本排版辅助
       overlay_window_behavior.py  # 窗口 flags 与关闭动作辅助
       overlay_geometry.py         # 背景/文本矩形与运行时快照辅助
       settings_window.py          # 设置面板 UI（含模型组合切换/下载）

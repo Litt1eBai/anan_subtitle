@@ -1,5 +1,15 @@
+from dataclasses import dataclass
+
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QColor, QBrush, QFont, QFontMetrics, QLinearGradient, QPainter, QPen, QPixmap
+
+
+@dataclass(frozen=True)
+class OverlayTextLayout:
+    text: str
+    text_rect: QRect
+    draw_rect: QRect
+    use_reveal: bool
 
 
 def build_centered_draw_rect(font: QFont, container_rect: QRect, text: str) -> QRect:
@@ -15,6 +25,34 @@ def build_centered_draw_rect(font: QFont, container_rect: QRect, text: str) -> Q
     draw_x = container_rect.left() + max(0, (container_rect.width() - draw_width) // 2)
     draw_y = container_rect.top() + max(0, (container_rect.height() - draw_height) // 2)
     return QRect(draw_x, draw_y, draw_width, draw_height)
+
+
+def clamp_text_rect_to_max_lines(font: QFont, text_rect: QRect, max_lines: int) -> QRect:
+    clamped = QRect(text_rect)
+    max_height = QFontMetrics(font).lineSpacing() * max(1, int(max_lines))
+    clamped.setHeight(min(clamped.height(), max_height))
+    return clamped
+
+
+def build_overlay_text_layout(
+    font: QFont,
+    text_rect: QRect,
+    *,
+    subtitle_text: str,
+    status_text: str,
+    text_max_lines: int,
+    text_anim_enable: bool,
+) -> OverlayTextLayout | None:
+    draw_text_value = subtitle_text if subtitle_text else status_text
+    if not draw_text_value:
+        return None
+    clamped_text_rect = clamp_text_rect_to_max_lines(font, text_rect, text_max_lines)
+    return OverlayTextLayout(
+        text=draw_text_value,
+        text_rect=clamped_text_rect,
+        draw_rect=build_centered_draw_rect(font, clamped_text_rect, draw_text_value),
+        use_reveal=bool(subtitle_text) and bool(text_anim_enable),
+    )
 
 
 def draw_text(painter: QPainter, font: QFont, text_rect: QRect, text: str, color: QColor) -> None:

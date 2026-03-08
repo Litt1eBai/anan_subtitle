@@ -2,7 +2,7 @@ import argparse
 from typing import Any
 
 from PySide6.QtCore import QPoint, QRect, Qt, QTimer, QElapsedTimer, Signal
-from PySide6.QtGui import QFont, QFontMetrics, QCloseEvent, QPainter, QPixmap
+from PySide6.QtGui import QFont, QCloseEvent, QPainter, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from presentation.model import (
@@ -49,7 +49,7 @@ from presentation.qt.overlay_window_setup import (
     resolve_initial_overlay_size,
 )
 from presentation.qt.overlay_renderer import (
-    build_centered_draw_rect,
+    build_overlay_text_layout,
     draw_background,
     draw_edit_guides,
     draw_reveal_text,
@@ -309,31 +309,36 @@ class SubtitleOverlay(QWidget):
         draw_background(painter, bg_rect, self._bg_pixmap)
 
         text_rect = self._build_text_rect()
-        max_height = QFontMetrics(self._font).lineSpacing() * self._style_spec.text_max_lines
-        text_rect.setHeight(min(text_rect.height(), max_height))
-        draw_text_value = self._view_state.subtitle_text if self._view_state.subtitle_text else self._view_state.status_text
-        if draw_text_value:
-            draw_rect = build_centered_draw_rect(self._font, text_rect, draw_text_value)
-            if self._view_state.subtitle_text and self._style_spec.text_anim_enable:
+        text_layout = build_overlay_text_layout(
+            self._font,
+            text_rect,
+            subtitle_text=self._view_state.subtitle_text,
+            status_text=self._view_state.status_text,
+            text_max_lines=self._style_spec.text_max_lines,
+            text_anim_enable=self._style_spec.text_anim_enable,
+        )
+        if text_layout is not None:
+            if text_layout.use_reveal:
                 draw_reveal_text(
                     painter,
                     self._font,
-                    draw_rect,
-                    draw_text_value,
+                    text_layout.draw_rect,
+                    text_layout.text,
                     self._text_color,
                     self._view_state.animation_progress,
                     self._style_spec.text_anim_fade_px,
                 )
             else:
-                draw_text(painter, self._font, draw_rect, draw_text_value, self._text_color)
+                draw_text(painter, self._font, text_layout.draw_rect, text_layout.text, self._text_color)
 
         if self._edit_mode:
+            guide_text_rect = text_layout.text_rect if text_layout is not None else text_rect
             draw_edit_guides(
                 painter,
                 self._font,
                 self.rect(),
-                text_rect,
-                list(build_text_handle_rects(text_rect, self._handle_size).values()),
+                guide_text_rect,
+                list(build_text_handle_rects(guide_text_rect, self._handle_size).values()),
                 bg_rect,
                 not self._bg_pixmap.isNull(),
             )
