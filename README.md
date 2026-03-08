@@ -127,3 +127,4 @@ python src/main.py --config config\app.yaml --model-profile hybrid
 - 目标架构：[docs/ARCHITECTURE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/ARCHITECTURE.md)
 - 当前实现：[docs/CURRENT_ARCHITECTURE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/CURRENT_ARCHITECTURE.md)
 - 重构映射：[docs/REFACTOR_MAPPING.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/REFACTOR_MAPPING.md)
+- 发布说明：[docs/RELEASE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/RELEASE.md)
