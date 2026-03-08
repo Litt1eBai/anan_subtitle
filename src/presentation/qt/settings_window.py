@@ -29,6 +29,13 @@ from core.models import (
 )
 from core.settings import MODEL_PROFILE_PRESETS, OVERLAY_PERSIST_KEYS
 from presentation.qt.overlay_window import SubtitleOverlay
+from presentation.qt.settings_window_models import (
+    build_model_config_updates,
+    build_model_download_requests,
+    build_model_profile_summary,
+    build_model_selection_state,
+    resolve_model_selection_state,
+)
 
 class OverlayControlPanel(QWidget):
     visibility_changed = Signal(bool)
@@ -42,20 +49,15 @@ class OverlayControlPanel(QWidget):
         self._download_thread: threading.Thread | None = None
         self._model_profile = parse_model_profile(getattr(args, "model_profile", MODEL_PROFILE_REALTIME))
         self._model_download_on_startup = bool(getattr(args, "model_download_on_startup", False))
-        self._model = str(getattr(args, "model", ""))
-        self._detector_model = str(getattr(args, "detector_model", "paraformer-zh-streaming"))
-        self._vad_model = str(getattr(args, "vad_model", ""))
-        self._punc_model = str(getattr(args, "punc_model", ""))
-        self._disable_vad_model = bool(getattr(args, "disable_vad_model", False))
-        self._disable_punc_model = bool(getattr(args, "disable_punc_model", False))
-        self._custom_profile_snapshot = {
-            "model": self._model,
-            "detector_model": self._detector_model,
-            "vad_model": self._vad_model,
-            "punc_model": self._punc_model,
-            "disable_vad_model": self._disable_vad_model,
-            "disable_punc_model": self._disable_punc_model,
-        }
+        self._model_selection = build_model_selection_state(
+            model=str(getattr(args, "model", "")),
+            detector_model=str(getattr(args, "detector_model", "paraformer-zh-streaming")),
+            vad_model=str(getattr(args, "vad_model", "")),
+            punc_model=str(getattr(args, "punc_model", "")),
+            disable_vad_model=bool(getattr(args, "disable_vad_model", False)),
+            disable_punc_model=bool(getattr(args, "disable_punc_model", False)),
+        )
+        self._custom_profile_snapshot = self._model_selection.to_dict()
         self.setWindowTitle("Subtitle Settings")
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
         self._build_ui()
@@ -231,33 +233,14 @@ class OverlayControlPanel(QWidget):
         return parse_model_profile(data)
 
     def _apply_profile_to_model_fields(self, profile: str) -> None:
-        if profile == MODEL_PROFILE_CUSTOM:
-            self._model = str(self._custom_profile_snapshot["model"])
-            self._detector_model = str(self._custom_profile_snapshot["detector_model"])
-            self._vad_model = str(self._custom_profile_snapshot["vad_model"])
-            self._punc_model = str(self._custom_profile_snapshot["punc_model"])
-            self._disable_vad_model = bool(self._custom_profile_snapshot["disable_vad_model"])
-            self._disable_punc_model = bool(self._custom_profile_snapshot["disable_punc_model"])
-            return
-        preset = MODEL_PROFILE_PRESETS[profile]
-        self._model = str(preset["model"])
-        self._detector_model = str(preset.get("detector_model", preset["model"]))
-        self._vad_model = str(preset["vad_model"])
-        self._punc_model = str(preset["punc_model"])
-        self._disable_vad_model = bool(preset["disable_vad_model"])
-        self._disable_punc_model = bool(preset["disable_punc_model"])
+        self._model_selection = resolve_model_selection_state(
+            profile,
+            custom_snapshot=self._custom_profile_snapshot,
+        )
 
     def _refresh_model_summary(self) -> None:
-        vad_text = "禁用" if self._disable_vad_model else self._vad_model
-        punc_text = "禁用" if self._disable_punc_model else self._punc_model
-        profile_name = self._profile_display_name(self._model_profile)
         self._model_summary_label.setText(
-            "当前组合: "
-            f"{profile_name} ({self._model_profile})\n"
-            f"Detector: {self._detector_model}\n"
-            f"ASR: {self._model}\n"
-            f"VAD: {vad_text}\n"
-            f"PUNC: {punc_text}"
+            build_model_profile_summary(self._model_profile, self._model_selection)
         )
 
     def _sync_model_controls(self) -> None:
@@ -275,18 +258,7 @@ class OverlayControlPanel(QWidget):
             self._syncing = False
 
     def _build_model_download_kwargs_list(self) -> list[dict[str, Any]]:
-        downloads: list[dict[str, Any]] = []
-        if self._model_profile == MODEL_PROFILE_HYBRID:
-            downloads.append({"model": self._detector_model, "disable_update": True})
-
-        kwargs: dict[str, Any] = {"model": self._model, "disable_update": True}
-        if "streaming" not in self._model:
-            if not self._disable_vad_model:
-                kwargs["vad_model"] = self._vad_model
-            if not self._disable_punc_model:
-                kwargs["punc_model"] = self._punc_model
-        downloads.append(kwargs)
-        return downloads
+        return build_model_download_requests(self._model_profile, self._model_selection)
 
     def _on_model_profile_changed(self, _index: int) -> None:
         if self._syncing:
@@ -306,7 +278,7 @@ class OverlayControlPanel(QWidget):
         if self._download_thread is not None and self._download_thread.is_alive():
             self._status_label.setText("模型下载进行中，请稍候。")
             return
-        if not self._model.strip():
+        if not self._model_selection.model.strip():
             self._status_label.setText("模型配置为空，无法下载。")
             return
         downloads = self._build_model_download_kwargs_list()
@@ -413,26 +385,13 @@ class OverlayControlPanel(QWidget):
                 key: value for key, value in overlay_settings.items() if key in OVERLAY_PERSIST_KEYS
             }
             if self._model_profile == MODEL_PROFILE_CUSTOM:
-                self._custom_profile_snapshot = {
-                    "model": self._model,
-                    "detector_model": self._detector_model,
-                    "vad_model": self._vad_model,
-                    "punc_model": self._punc_model,
-                    "disable_vad_model": self._disable_vad_model,
-                    "disable_punc_model": self._disable_punc_model,
-                }
+                self._custom_profile_snapshot = self._model_selection.to_dict()
             updates.update(
-                {
-                    "model_profile": self._model_profile,
-                    "model_download_on_startup": self._model_download_on_startup,
-                    "model_profile_prompted": True,
-                    "model": self._model,
-                    "detector_model": self._detector_model,
-                    "vad_model": self._vad_model,
-                    "punc_model": self._punc_model,
-                    "disable_vad_model": self._disable_vad_model,
-                    "disable_punc_model": self._disable_punc_model,
-                }
+                build_model_config_updates(
+                    self._model_profile,
+                    model_download_on_startup=self._model_download_on_startup,
+                    selection=self._model_selection,
+                )
             )
             write_config_values(self._config_path, updates)
             self._status_label.setText(f"已保存: {self._config_path}（模型切换需重启生效）")
