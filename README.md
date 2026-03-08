@@ -122,6 +122,30 @@ python src/main.py --config config\app.yaml --model-profile hybrid
 - 首次运行会下载模型，耗时较长。
 - 流式识别调用方式为 `cache + chunk_size + is_final`。
 
+## 许可证
+
+本项目源码采用 [MIT License](C:/Users/littlebai/workspace/personal/anan_subtitle/LICENSE)。
+
+## 第三方开源依赖
+
+本项目当前直接依赖并引用了这些主要开源库：
+
+- `PySide6`：`LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only`
+- `sounddevice`：`MIT`
+- `numpy`：`BSD-3-Clause`
+- `funasr`：当前安装包元数据显示 `MIT`，但 classifier 同时出现 `Apache Software License`，发布前建议继续以其上游仓库声明为准核对一次
+- `modelscope`：`Apache-2.0`
+- `torch`：`BSD-3-Clause`
+- `torchaudio`：`BSD` / `BSD-3-Clause` 风格许可证
+- `PyYAML`：`MIT`
+
+当前仓库中的自有代码没有复制这些第三方库源码，只是通过正常依赖和 API 调用来使用它们；按当前代码形态，没有看到明显的源码许可证冲突。
+
+但有两点需要单独注意：
+
+- `PySide6` 不是 MIT。你的项目源码可以继续采用 MIT，但如果你后续分发 Windows 二进制或打包版，需要额外遵守 `PySide6/Qt` 的 `LGPL` 要求，例如保留许可证与相关声明，并按其分发条件处理。
+- `FunASR` / `ModelScope` 下载的模型权重、模型卡和相关资源，可能有独立于 Python 包本身的使用条款。发布可执行版本前，建议逐个确认你实际分发或自动下载的模型许可。
+
 ## 开发文档
 
 - 目标架构：[docs/ARCHITECTURE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/ARCHITECTURE.md)
