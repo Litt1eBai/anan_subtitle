@@ -1,28 +1,22 @@
 from dataclasses import dataclass
 import argparse
-from collections import deque
 import logging
 import queue
 import threading
-import time
-from typing import Any, Protocol
+from typing import Any
 
 import numpy as np
 
 from core.models import MODEL_PROFILE_HYBRID
-from core.text_postprocess import extract_text, replace_sentence_initial_wo
+from recognition.engine_runtime import (
+    OfflineLatencyTracker,
+    WorkerSignals,
+    emit_subtitle,
+    timed_transcribe_offline,
+    transcribe_streaming,
+)
 from recognition.offline_session import run_offline_session
 from recognition.realtime_session import run_hybrid_session, run_streaming_session
-
-
-class SignalChannel(Protocol):
-    def emit(self, value: str) -> None: ...
-
-
-class WorkerSignals(Protocol):
-    subtitle: SignalChannel
-    status: SignalChannel
-    error: SignalChannel
 
 
 @dataclass(frozen=True)
@@ -77,9 +71,11 @@ def run_worker_loop(worker: "ASRWorker", loaded_models: LoadedRecognitionModels)
         run_streaming_session(worker, loaded_models.primary_model)
         LOGGER.info("Streaming ASR loop stopped")
         return
+
+    report_every = getattr(getattr(worker, "_offline_latency", None), "report_every", 5)
     LOGGER.info(
         "Offline latency probe enabled (summary every %d finalized segments)",
-        worker._offline_report_every,
+        report_every,
     )
     LOGGER.info("Offline ASR loop running")
     run_offline_session(worker, loaded_models.primary_model)
@@ -110,16 +106,10 @@ class ASRWorker(threading.Thread):
         self.encoder_chunk_look_back = args.encoder_chunk_look_back
         self.decoder_chunk_look_back = args.decoder_chunk_look_back
         self.chunk_stride_samples = max(1, int(self.args.samplerate * self.chunk_size[1] * 0.06))
-        self._offline_report_every = 5
-        self._offline_final_count = 0
-        self._offline_final_tail_ms: deque[float] = deque(maxlen=200)
-        self._offline_final_total_ms: deque[float] = deque(maxlen=200)
-        self._offline_final_lag_ms: deque[float] = deque(maxlen=200)
+        self._offline_latency = OfflineLatencyTracker(report_every=5)
 
     def _emit_subtitle(self, text: str) -> None:
-        converted = replace_sentence_initial_wo(text.strip())
-        if converted:
-            self.signals.subtitle.emit(converted)
+        emit_subtitle(self.signals, text)
 
     def _load_streaming_model(self, model_name: str) -> Any:
         from funasr import AutoModel
@@ -131,52 +121,28 @@ class ASRWorker(threading.Thread):
 
         return AutoModel(**build_offline_model_kwargs(self.args, model_name))
 
-    def _transcribe(self, model: Any, audio: np.ndarray) -> str:
-        if audio.size == 0:
-            return ""
-        try:
-            result = model.generate(input=audio, batch_size_s=60, fs=self.args.samplerate)
-        except TypeError:
-            result = model.generate(input=audio, fs=self.args.samplerate)
-        except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.exception("ASR failed (offline)")
-            self.signals.error.emit(f"ASR failed: {exc}")
-            return ""
-        return extract_text(result)
+    def _timed_transcribe(self, model: Any, audio: np.ndarray) -> tuple[str, float]:
+        return timed_transcribe_offline(
+            model,
+            audio,
+            samplerate=self.args.samplerate,
+            error_signal=self.signals.error,
+        )
 
     def _transcribe_streaming(
         self, model: Any, audio: np.ndarray, cache: dict[str, Any], is_final: bool
     ) -> str:
-        try:
-            result = model.generate(
-                input=audio,
-                cache=cache,
-                is_final=is_final,
-                fs=self.args.samplerate,
-                chunk_size=self.chunk_size,
-                encoder_chunk_look_back=self.encoder_chunk_look_back,
-                decoder_chunk_look_back=self.decoder_chunk_look_back,
-            )
-        except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.exception("ASR failed (streaming)")
-            self.signals.error.emit(f"ASR failed: {exc}")
-            return ""
-        return extract_text(result)
-
-    def _timed_transcribe(self, model: Any, audio: np.ndarray) -> tuple[str, float]:
-        begin = time.perf_counter()
-        text = self._transcribe(model, audio)
-        elapsed_ms = (time.perf_counter() - begin) * 1000.0
-        return text, elapsed_ms
-
-    @staticmethod
-    def _percentile(values: list[float], ratio: float) -> float:
-        if not values:
-            return 0.0
-        ordered = sorted(values)
-        index = int(round((len(ordered) - 1) * ratio))
-        index = max(0, min(index, len(ordered) - 1))
-        return ordered[index]
+        return transcribe_streaming(
+            model,
+            audio,
+            cache,
+            is_final=is_final,
+            samplerate=self.args.samplerate,
+            chunk_size=self.chunk_size,
+            encoder_chunk_look_back=self.encoder_chunk_look_back,
+            decoder_chunk_look_back=self.decoder_chunk_look_back,
+            error_signal=self.signals.error,
+        )
 
     def _log_offline_latency(
         self,
@@ -188,53 +154,15 @@ class ASRWorker(threading.Thread):
         infer_ms: float,
         chars: int,
     ) -> None:
-        now = time.perf_counter()
-        total_ms = (now - speech_started_at) * 1000.0 if speech_started_at is not None else None
-        tail_ms = (now - last_audio_at) * 1000.0 if last_audio_at is not None else None
-        audio_ms = segment_samples * 1000.0 / max(1, int(self.args.samplerate))
-        lag_ms = max(0.0, total_ms - audio_ms) if total_ms is not None else None
-        rtf = infer_ms / max(1.0, audio_ms)
-        total_text = "n/a" if total_ms is None else f"{total_ms:.0f}ms"
-        tail_text = "n/a" if tail_ms is None else f"{tail_ms:.0f}ms"
-        lag_text = "n/a" if lag_ms is None else f"{lag_ms:.0f}ms"
-        LOGGER.info(
-            "Offline latency (%s/%s): total=%s lag=%s tail=%s infer=%.0fms audio=%.0fms rtf=%.2f chars=%d",
-            stage,
-            reason,
-            total_text,
-            lag_text,
-            tail_text,
-            infer_ms,
-            audio_ms,
-            rtf,
-            chars,
-        )
-        if stage != "final" or total_ms is None or tail_ms is None:
-            return
-
-        self._offline_final_count += 1
-        self._offline_final_total_ms.append(total_ms)
-        self._offline_final_tail_ms.append(tail_ms)
-        if lag_ms is not None:
-            self._offline_final_lag_ms.append(lag_ms)
-        if self._offline_final_count % self._offline_report_every != 0:
-            return
-
-        avg_total = sum(self._offline_final_total_ms) / len(self._offline_final_total_ms)
-        avg_lag = (
-            sum(self._offline_final_lag_ms) / len(self._offline_final_lag_ms)
-            if self._offline_final_lag_ms
-            else 0.0
-        )
-        avg_tail = sum(self._offline_final_tail_ms) / len(self._offline_final_tail_ms)
-        p95_tail = self._percentile(list(self._offline_final_tail_ms), 0.95)
-        LOGGER.info(
-            "Offline latency summary: finals=%d avg_total=%.0fms avg_lag=%.0fms avg_tail=%.0fms p95_tail=%.0fms",
-            self._offline_final_count,
-            avg_total,
-            avg_lag,
-            avg_tail,
-            p95_tail,
+        self._offline_latency.log(
+            stage=stage,
+            reason=reason,
+            speech_started_at=speech_started_at,
+            last_audio_at=last_audio_at,
+            segment_samples=segment_samples,
+            infer_ms=infer_ms,
+            chars=chars,
+            samplerate=self.args.samplerate,
         )
 
     def run(self) -> None:
