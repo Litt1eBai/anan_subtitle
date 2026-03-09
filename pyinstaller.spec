@@ -16,8 +16,8 @@ datas = [
     (str(project_root / "config" / "default.yaml"), "config"),
     (str(project_root / "config" / "base.png"), "config"),
 ]
-datas += collect_data_files("funasr", includes=["**/*.yaml", "**/*.yml", "**/*.json"])
-datas += collect_data_files("modelscope", includes=["**/*.yaml", "**/*.yml", "**/*.json"])
+datas += collect_data_files("funasr", includes=["**/*.yaml", "**/*.yml", "**/*.json", "**/*.txt"])
+datas += collect_data_files("modelscope", includes=["**/*.yaml", "**/*.yml", "**/*.json", "**/*.txt"])
 
 a = Analysis(
     [str(entry_script)],
