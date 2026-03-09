@@ -97,6 +97,13 @@ $env:PYTHONPATH='src'
 
 构建脚本会调用 `pyinstaller.spec`，输出 `dist\anan_subtitle\` 目录，并复制 `LICENSE`、`README.md` 以及已有的发布辅助文档。
 
+当前发布包应随附的合规文档：
+
+- `docs/THIRD_PARTY_NOTICES.md`
+- `docs/MODEL_SOURCES.md`
+- `docs/PYSIDE6_LGPL_NOTICE.md`
+- `PySide6` / Qt `LGPL` 许可证文本
+
 ### 3. 准备发布说明
 
 建议至少写清楚：
@@ -205,7 +212,22 @@ git push origin v0.2.0
 
 如果发布包会自动下载模型，也应在 README 或发布说明中写清这些模型来源。
 
-### 6. 清理本机运行态配置，做一个干净 tag
+当前仓库已提供：
+
+- `docs/MODEL_SOURCES.md`
+
+正式发布前仍应继续补齐上游模型页面链接与最终许可核对结果。
+
+### 6. 第三方依赖与资源资产说明
+
+正式发布前应确保发布包随附：
+
+- `docs/THIRD_PARTY_NOTICES.md`
+- `PySide6` / Qt `LGPL` 许可证文本
+
+如果发布包包含第三方图片、角色形象或游戏资产，也应在该文档中写清来源与版权归属。
+
+### 7. 清理本机运行态配置，做一个干净 tag
 
 正式发布前应保证：
 

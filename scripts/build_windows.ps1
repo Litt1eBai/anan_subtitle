@@ -31,5 +31,8 @@ if (Test-Path "docs\MODEL_SOURCES.md") {
 if (Test-Path "docs\THIRD_PARTY_NOTICES.md") {
     Copy-Item "docs\THIRD_PARTY_NOTICES.md" (Join-Path $DistRoot "THIRD_PARTY_NOTICES.md") -Force
 }
+if (Test-Path "docs\PYSIDE6_LGPL_NOTICE.md") {
+    Copy-Item "docs\PYSIDE6_LGPL_NOTICE.md" (Join-Path $DistRoot "PYSIDE6_LGPL_NOTICE.md") -Force
+}
 
 Write-Host "Build completed: $DistRoot"

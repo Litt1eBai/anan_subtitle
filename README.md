@@ -51,6 +51,23 @@ pip install -r requirements.txt
 python src/main.py --config config\app.yaml
 ```
 
+## 开发流程
+
+开发阶段推荐流程：
+
+```powershell
+$env:PYTHONPATH='src'
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m compileall src
+```
+
+开发运行：
+
+```powershell
+$env:PYTHONPATH='src'
+.\.venv\Scripts\python.exe src\main.py --config config\app.yaml
+```
+
 示例（命令行覆盖配置）：
 
 ```powershell
@@ -131,7 +148,7 @@ python src/main.py --config config\app.yaml --model-profile hybrid
 - `config/base.png`
 - `LICENSE`
 - `README.md`
-- 若存在，则复制 `docs/SMOKE_TEST.md`、`docs/MODEL_SOURCES.md`、`docs/THIRD_PARTY_NOTICES.md`
+- 若存在，则复制 `docs/SMOKE_TEST.md`、`docs/MODEL_SOURCES.md`、`docs/THIRD_PARTY_NOTICES.md`、`docs/PYSIDE6_LGPL_NOTICE.md`
 
 ## 延迟日志
 
@@ -169,6 +186,7 @@ python src/main.py --config config\app.yaml --model-profile hybrid
 
 - `PySide6` 不是 MIT。你的项目源码可以继续采用 MIT，但如果你后续分发 Windows 二进制或打包版，需要额外遵守 `PySide6/Qt` 的 `LGPL` 要求；按当前发布约束，后续打包应采用动态链接方式，并随发布包附带 `LGPL` 声明和相关许可文本。
 - `FunASR` / `ModelScope` 下载的模型权重、模型卡和相关资源，可能有独立于 Python 包本身的使用条款。发布可执行版本前，建议逐个确认你实际分发或自动下载的模型许可，并在 README 或发布说明中注明实际使用模型的来源。
+- 默认背景图片 `config/base.png` 中的人物形象来源于游戏作品，相关版权归游戏及其权利方所有；该资源不属于本项目 `MIT` 授权范围，公开分发前应确认其使用与分发权限。
 
 ## 开发文档
 
@@ -177,3 +195,7 @@ python src/main.py --config config\app.yaml --model-profile hybrid
 - 下个目标：[docs/NEXT_TARGET.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/NEXT_TARGET.md)
 - 发布说明：[docs/RELEASE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/RELEASE.md)
 - 冒烟清单：[docs/SMOKE_TEST.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/SMOKE_TEST.md)
+- 第三方说明：[docs/THIRD_PARTY_NOTICES.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/THIRD_PARTY_NOTICES.md)
+- 模型来源：[docs/MODEL_SOURCES.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/MODEL_SOURCES.md)
+- 开发与打包流程：[docs/DEVELOPMENT_AND_PACKAGING.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/DEVELOPMENT_AND_PACKAGING.md)
+- PySide6 LGPL 提示：[docs/PYSIDE6_LGPL_NOTICE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/PYSIDE6_LGPL_NOTICE.md)
