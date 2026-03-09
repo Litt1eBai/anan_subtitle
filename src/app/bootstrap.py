@@ -83,7 +83,8 @@ def prompt_model_profile_on_first_run(args: Any, config_path: Path) -> None:
         args, "model_profile_prompted", False
     ):
         return
-    if not sys.stdin.isatty():
+    stdin = getattr(sys, "stdin", None)
+    if stdin is None or not getattr(stdin, "isatty", lambda: False)():
         LOGGER.info("First-run model profile prompt skipped (non-interactive terminal)")
         return
 
