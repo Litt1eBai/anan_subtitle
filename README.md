@@ -47,7 +47,7 @@
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-lock.txt
 python src/main.py --config config\app.yaml
 ```
 
@@ -137,7 +137,7 @@ python src/main.py --config config\app.yaml --model-profile hybrid
 构建 Windows 发布目录：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-build-lock.txt
 .\scripts\build_windows.ps1
 ```
 

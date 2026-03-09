@@ -1,2 +1,4 @@
 -r requirements.txt
 pyinstaller>=6.0,<7.0
+
+# Release builds should prefer requirements-build-lock.txt

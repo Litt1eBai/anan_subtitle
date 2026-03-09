@@ -13,7 +13,7 @@
 
 - 还没有真正的 Windows `exe` 打包方案
 - 自动化测试主要是单元测试，缺少端到端验证
-- 依赖版本还没有收敛
+- 依赖版本仍需以 lock 文件为发布基线持续维护
 - 首次启动和模型下载路径还需要按最终产品体验再打磨
 
 ## v0.2.0 评估结论
@@ -37,7 +37,7 @@
 
 - 没有 `exe` 打包交付
 - 缺少端到端发布验证
-- 依赖版本未锁定
+- 正式发布仍应以 lock 文件对应的干净环境构建
 
 ## 是否可以只用 Git 标签发布
 
@@ -91,7 +91,7 @@ $env:PYTHONPATH='src'
 当前构建命令：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-build-lock.txt
 .\scripts\build_windows.ps1
 ```
 
@@ -193,13 +193,16 @@ git push origin v0.2.0
 
 ### 4. 依赖版本收敛
 
-当前 `requirements.txt` 使用的是宽版本范围。
+当前仓库已补充：
+
+- `requirements-lock.txt`
+- `requirements-build-lock.txt`
 
 正式版前建议至少做到：
 
-- 固定核心依赖版本
-- 避免每次安装得到不同结果
-- 明确兼容的 Python 版本
+- 发布构建统一使用 lock 文件
+- 变更依赖后重新生成并验证 lock 文件
+- 明确兼容的 Python 版本（当前锁定环境基于 `Python 3.14.2`）
 
 ### 5. 模型来源与使用条款说明
 

@@ -1,0 +1,6 @@
+-r requirements-lock.txt
+altgraph==0.17.5
+pefile==2024.8.26
+pyinstaller-hooks-contrib==2026.2
+pyinstaller==6.19.0
+pywin32-ctypes==0.2.3

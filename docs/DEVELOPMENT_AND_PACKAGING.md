@@ -9,14 +9,23 @@
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-lock.txt
 ```
 
 如果需要构建发布包：
 
 ```powershell
-pip install -r requirements-build.txt
+pip install -r requirements-build-lock.txt
 ```
+
+### 依赖文件说明
+
+- `requirements.txt`：运行依赖的范围声明
+- `requirements-build.txt`：构建依赖的范围声明
+- `requirements-lock.txt`：当前已验证的运行依赖锁定版本
+- `requirements-build-lock.txt`：当前已验证的构建依赖锁定版本
+
+当前锁定环境基于 `Python 3.14.2` 验证。
 
 ### 开发运行
 
@@ -58,7 +67,7 @@ $env:PYTHONPATH='src'
 ### 构建命令
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-build-lock.txt
 .\scripts\build_windows.ps1
 ```
 

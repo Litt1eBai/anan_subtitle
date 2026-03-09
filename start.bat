@@ -21,7 +21,7 @@ if not exist ".venv\Scripts\python.exe" (
 set PYTHON=.venv\Scripts\python.exe
 
 echo [INFO] Installing dependencies...
-"%PYTHON%" -m pip install --disable-pip-version-check -r requirements.txt
+"%PYTHON%" -m pip install --disable-pip-version-check -r requirements-lock.txt
 if errorlevel 1 (
   echo [ERROR] Failed to install dependencies.
   pause

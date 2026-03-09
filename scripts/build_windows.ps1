@@ -11,7 +11,7 @@ if (-not (Test-Path $Python)) {
 
 & $Python -c "import PyInstaller" | Out-Null
 if ($LASTEXITCODE -ne 0) {
-    throw "PyInstaller is not installed. Run: .\.venv\Scripts\python.exe -m pip install -r requirements-build.txt"
+    throw "PyInstaller is not installed. Run: .\.venv\Scripts\python.exe -m pip install -r requirements-build-lock.txt"
 }
 
 & $Python -m PyInstaller --noconfirm --clean pyinstaller.spec
