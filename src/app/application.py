@@ -23,7 +23,9 @@ def main() -> int:
         return 2
 
     config_path = Path(args.config).expanduser().resolve()
-    prompt_model_profile_on_first_run(args, config_path)
+    if not prompt_model_profile_on_first_run(args, config_path):
+        LOGGER.info("First-run setup cancelled by user")
+        return 0
     if args.model_download_on_startup:
         download_selected_model_combo(args)
 

@@ -30,7 +30,7 @@
 - 配置文件读取与类型校验（YAML）
 - 命令行参数覆盖配置文件
 - 运行时窗口布局可保存回配置文件（源码运行默认写回 `config/app.yaml`，打包版默认写到用户目录）
-- 首次启动可交互选择模型组合（实时/非实时）
+- 首次启动可交互选择模型组合（源码终端走命令行，打包版走 GUI 对话框）
 
 ## 一键启动（推荐）
 
@@ -97,8 +97,8 @@ python src/main.py --config config\app.yaml --font-size 36 --x 100 --y 100
 - `model_profile: hybrid`：实时模型检测起句 + 非实时模型整句识别
 - `model_profile: custom`：手工指定 `model/vad_model/punc_model`
 
-首次运行会提示选择模型组合，并写回当前运行态配置文件。  
-如需提前下载模型，可设置 `model_download_on_startup: true`。
+首次运行会提示选择模型组合，并写回当前运行态配置文件。打包版首次启动会弹出 GUI 对话框，并可立即下载所选模型。  
+如需每次启动前预下载模型，可设置 `model_download_on_startup: true`。
 
 ## 常用命令
 
