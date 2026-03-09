@@ -3,20 +3,24 @@ import shutil
 import unittest
 import uuid
 from pathlib import Path
+from unittest import mock
 
+import core.settings as settings
+from core.models import MODEL_PROFILE_OFFLINE, MODEL_PROFILE_REALTIME
 from core.settings import (
+    DEFAULT_CONFIG_TEMPLATE_PATH,
     apply_model_profile_to_args,
     apply_model_profile_to_settings,
+    ensure_runtime_config_file,
     ensure_runtime_config_path,
     ensure_valid_image,
+    get_default_runtime_config_path,
     is_template_config_path,
     normalize_config,
     parse_chunk_size,
     resolve_runtime_config_path,
     write_config_values,
 )
-from core.models import MODEL_PROFILE_OFFLINE, MODEL_PROFILE_REALTIME
-from core.settings import DEFAULT_CONFIG_TEMPLATE_PATH
 
 
 class ParseChunkSizeTests(unittest.TestCase):
@@ -52,7 +56,7 @@ class NormalizeConfigTests(unittest.TestCase):
 
 class ModelProfileTests(unittest.TestCase):
     def test_apply_model_profile_to_settings_overrides_preset_fields(self) -> None:
-        settings = {
+        settings_dict = {
             "model_profile": MODEL_PROFILE_OFFLINE,
             "model": "custom-model",
             "detector_model": "custom-detector",
@@ -61,7 +65,7 @@ class ModelProfileTests(unittest.TestCase):
             "disable_vad_model": True,
             "disable_punc_model": True,
         }
-        updated = apply_model_profile_to_settings(settings)
+        updated = apply_model_profile_to_settings(settings_dict)
         self.assertEqual(updated["model_profile"], MODEL_PROFILE_OFFLINE)
         self.assertEqual(updated["model"], "paraformer-zh")
         self.assertEqual(updated["detector_model"], "paraformer-zh-streaming")
@@ -96,6 +100,35 @@ class RuntimeConfigPathTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ensure_runtime_config_path(DEFAULT_CONFIG_TEMPLATE_PATH)
 
+    def test_get_default_runtime_config_path_uses_user_directory_when_frozen(self) -> None:
+        tmpdir = Path("tests") / ("tmp_" + uuid.uuid4().hex)
+        try:
+            local_app_data = (tmpdir / "LocalAppData").resolve()
+            with mock.patch.object(settings.sys, "frozen", True, create=True):
+                with mock.patch.dict("os.environ", {"LOCALAPPDATA": str(local_app_data)}, clear=False):
+                    runtime_path = get_default_runtime_config_path()
+            expected = (local_app_data / settings.APP_DIR_NAME / settings.DEFAULT_CONFIG_DIR / settings.DEFAULT_CONFIG_FILENAME).resolve()
+            self.assertEqual(runtime_path, expected)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_ensure_runtime_config_file_creates_runtime_copy_from_template(self) -> None:
+        tmpdir = Path("tests") / ("tmp_" + uuid.uuid4().hex)
+        try:
+            bundle_dir = (tmpdir / "bundle" / settings.DEFAULT_CONFIG_DIR).resolve()
+            bundle_dir.mkdir(parents=True, exist_ok=True)
+            template_path = bundle_dir / settings.DEFAULT_CONFIG_TEMPLATE_FILENAME
+            template_path.write_text("font_size: 42\n", encoding="utf-8")
+            runtime_path = (tmpdir / "user" / "app.yaml").resolve()
+
+            with mock.patch.object(settings.sys, "_MEIPASS", str(bundle_dir.parent), create=True):
+                created_path = ensure_runtime_config_file(runtime_path)
+
+            self.assertEqual(created_path, runtime_path)
+            self.assertEqual(runtime_path.read_text(encoding="utf-8"), "font_size: 42\n")
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
 
 class EnsureValidImageTests(unittest.TestCase):
     def test_ensure_valid_image_finds_relative_path_next_to_config(self) -> None:
@@ -109,6 +142,25 @@ class EnsureValidImageTests(unittest.TestCase):
             config_path.write_text("{}", encoding="utf-8")
 
             resolved = ensure_valid_image("base.png", config_path)
+
+            self.assertEqual(resolved, str(image_path.resolve()))
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_ensure_valid_image_finds_packaged_default_asset(self) -> None:
+        tmpdir = Path("tests") / ("tmp_" + uuid.uuid4().hex)
+        try:
+            config_dir = tmpdir / "config"
+            config_dir.mkdir(parents=True, exist_ok=True)
+            config_path = config_dir / "app.yaml"
+            config_path.write_text("{}", encoding="utf-8")
+            bundle_dir = (tmpdir / "bundle" / settings.DEFAULT_CONFIG_DIR).resolve()
+            bundle_dir.mkdir(parents=True, exist_ok=True)
+            image_path = bundle_dir / "base.png"
+            image_path.write_bytes(b"png")
+
+            with mock.patch.object(settings.sys, "_MEIPASS", str(bundle_dir.parent), create=True):
+                resolved = ensure_valid_image("", config_path)
 
             self.assertEqual(resolved, str(image_path.resolve()))
         finally:

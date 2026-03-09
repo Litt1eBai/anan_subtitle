@@ -88,6 +88,15 @@ $env:PYTHONPATH='src'
 - `exe` 构建验证
 - 安装后启动验证
 
+当前构建命令：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
+.\scripts\build_windows.ps1
+```
+
+构建脚本会调用 `pyinstaller.spec`，输出 `dist\anan_subtitle\` 目录，并复制 `LICENSE`、`README.md` 以及已有的发布辅助文档。
+
 ### 3. 准备发布说明
 
 建议至少写清楚：

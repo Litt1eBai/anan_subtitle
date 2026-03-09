@@ -29,7 +29,7 @@
 ### 5) 配置管理
 - 配置文件读取与类型校验（YAML）
 - 命令行参数覆盖配置文件
-- 运行时窗口布局可保存回 `config/app.yaml`
+- 运行时窗口布局可保存回配置文件（源码运行默认写回 `config/app.yaml`，打包版默认写到用户目录）
 - 首次启动可交互选择模型组合（实时/非实时）
 
 ## 一键启动（推荐）
@@ -59,8 +59,10 @@ python src/main.py --config config\app.yaml --font-size 36 --x 100 --y 100
 
 ## 配置说明
 
-默认配置文件：[config/app.yaml](C:/Users/littlebai/workspace/personal/anan_subtitle/config/app.yaml)  
+源码运行默认配置文件：[config/app.yaml](C:/Users/littlebai/workspace/personal/anan_subtitle/config/app.yaml)  
 模板文件：[config/default.yaml](C:/Users/littlebai/workspace/personal/anan_subtitle/config/default.yaml)
+
+打包版默认会把运行态配置写到用户目录：`%LOCALAPPDATA%\anan_subtitle\config\app.yaml`。首次启动若不存在，会从包内的 `default.yaml` 自动生成。
 
 常用配置组：
 - 窗口：`x`, `y`, `width`, `height`, `lock_size_to_bg`, `windowed_mode`, `stay_on_top`, `opacity`
@@ -78,7 +80,7 @@ python src/main.py --config config\app.yaml --font-size 36 --x 100 --y 100
 - `model_profile: hybrid`：实时模型检测起句 + 非实时模型整句识别
 - `model_profile: custom`：手工指定 `model/vad_model/punc_model`
 
-首次运行会提示选择模型组合，并写回 `config/app.yaml`。  
+首次运行会提示选择模型组合，并写回当前运行态配置文件。  
 如需提前下载模型，可设置 `model_download_on_startup: true`。
 
 ## 常用命令
@@ -112,6 +114,26 @@ python src/main.py --config config\app.yaml --model-profile offline
 ```powershell
 python src/main.py --config config\app.yaml --model-profile hybrid
 ```
+
+## Windows 打包
+
+构建 Windows 发布目录：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
+.\scripts\build_windows.ps1
+```
+
+构建完成后，产物位于 `dist\anan_subtitle\`，主程序是 `dist\anan_subtitle\anan_subtitle.exe`。
+
+当前打包链路会把这些资源一起带上：
+- `config/default.yaml`
+- `config/base.png`
+- `LICENSE`
+- `README.md`
+- 若存在，则复制 `docs/SMOKE_TEST.md`、`docs/MODEL_SOURCES.md`、`docs/THIRD_PARTY_NOTICES.md`
+
+## 延迟日志
 
 运行后可在日志中查看离线模式延迟打点：
 - `Offline latency (partial/interval)`：分段内增量字幕延迟
@@ -154,3 +176,4 @@ python src/main.py --config config\app.yaml --model-profile hybrid
 - 现状：[docs/CURRENT_ARCHITECTURE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/CURRENT_ARCHITECTURE.md)
 - 下个目标：[docs/NEXT_TARGET.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/NEXT_TARGET.md)
 - 发布说明：[docs/RELEASE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/RELEASE.md)
+- 冒烟清单：[docs/SMOKE_TEST.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/SMOKE_TEST.md)

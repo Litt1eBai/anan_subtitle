@@ -1,4 +1,5 @@
 import argparse
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -12,6 +13,7 @@ from core.models import (
     MODEL_PROFILE_REALTIME,
 )
 
+APP_DIR_NAME = "anan_subtitle"
 DEFAULT_CONFIG_DIR = "config"
 DEFAULT_CONFIG_FILENAME = "app.yaml"
 DEFAULT_CONFIG_TEMPLATE_FILENAME = "default.yaml"
@@ -65,6 +67,87 @@ OVERLAY_PERSIST_KEYS = {
     "bg_offset_x",
     "bg_offset_y",
 }
+
+def is_frozen_runtime() -> bool:
+    return bool(getattr(sys, "frozen", False))
+
+
+def get_resource_root() -> Path:
+    if hasattr(sys, "_MEIPASS"):
+        return Path(getattr(sys, "_MEIPASS")).resolve()
+    return Path(__file__).resolve().parents[2]
+
+
+def get_user_data_dir() -> Path:
+    local_app_data = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+    if local_app_data:
+        return Path(local_app_data).expanduser().resolve() / APP_DIR_NAME
+    return Path.home().resolve() / f".{APP_DIR_NAME}"
+
+
+def get_user_config_dir() -> Path:
+    return get_user_data_dir() / DEFAULT_CONFIG_DIR
+
+
+def get_default_runtime_config_path() -> Path:
+    if is_frozen_runtime():
+        return (get_user_config_dir() / DEFAULT_CONFIG_FILENAME).resolve()
+    return (Path(DEFAULT_CONFIG_PATH).expanduser()).resolve()
+
+
+def resolve_default_template_path() -> Path:
+    return (get_resource_root() / DEFAULT_CONFIG_DIR / DEFAULT_CONFIG_TEMPLATE_FILENAME).resolve()
+
+
+def _iter_image_candidates(normalized: str, config_path: Path) -> list[Path]:
+    config_dir = config_path.parent.resolve()
+    resource_root = get_resource_root()
+    resource_config_dir = (resource_root / DEFAULT_CONFIG_DIR).resolve()
+    user_config_dir = get_user_config_dir().resolve()
+    candidates: list[Path] = []
+
+    if normalized:
+        user_path = Path(normalized).expanduser()
+        if user_path.is_absolute():
+            candidates.append(user_path)
+        else:
+            candidates.extend(
+                (
+                    config_dir / user_path,
+                    user_config_dir / user_path,
+                    Path.cwd() / user_path,
+                    resource_root / user_path,
+                    resource_config_dir / user_path,
+                )
+            )
+    else:
+        default_name = Path("base.png")
+        candidates.extend(
+            (
+                config_dir / default_name,
+                user_config_dir / default_name,
+                Path.cwd() / default_name,
+                resource_root / default_name,
+                resource_config_dir / default_name,
+            )
+        )
+
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique.append(resolved)
+    return unique
+
+
+def ensure_runtime_config_file(path: str | Path) -> Path:
+    resolved = ensure_runtime_config_path(path)
+    if not resolved.exists():
+        write_default_config(resolved)
+    return resolved
+
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "x": 80,
@@ -266,11 +349,10 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def resolve_runtime_config_path(path: str | Path) -> Path:
+    raw = str(path).strip() if isinstance(path, str) else str(path)
+    if not raw:
+        return get_default_runtime_config_path()
     return Path(path).expanduser().resolve()
-
-
-def resolve_default_template_path() -> Path:
-    return Path(DEFAULT_CONFIG_TEMPLATE_PATH).expanduser().resolve()
 
 
 def is_template_config_path(path: str | Path) -> bool:
@@ -311,7 +393,7 @@ def write_default_config(path: Path) -> None:
 
 def parse_args() -> argparse.Namespace:
     bootstrap = argparse.ArgumentParser(add_help=False)
-    bootstrap.add_argument("--config", type=str, default=DEFAULT_CONFIG_PATH)
+    bootstrap.add_argument("--config", type=str, default=str(get_default_runtime_config_path()))
     bootstrap.add_argument(
         "--dump-default-config",
         type=str,
@@ -320,7 +402,7 @@ def parse_args() -> argparse.Namespace:
     )
     bootstrap_args, _ = bootstrap.parse_known_args()
 
-    config_path = ensure_runtime_config_path(bootstrap_args.config)
+    config_path = ensure_runtime_config_file(bootstrap_args.config)
     defaults = dict(DEFAULT_CONFIG)
     loaded_from_file: dict[str, Any] = {}
     try:
@@ -564,30 +646,14 @@ def parse_args() -> argparse.Namespace:
 
 def ensure_valid_image(path: str, config_path: Path) -> str:
     normalized = path.strip()
-    candidates: list[Path] = []
-    if normalized:
-        user_path = Path(normalized).expanduser()
-        if user_path.is_absolute():
-            candidates.append(user_path)
-        else:
-            candidates.extend((Path.cwd() / user_path, config_path.parent / user_path))
-    else:
-        default_name = Path("base.png")
-        candidates.extend(
-            (
-                Path.cwd() / default_name,
-                config_path.parent / default_name,
-                Path.cwd() / "config" / default_name,
-            )
-        )
+    candidates = _iter_image_candidates(normalized, config_path)
 
     for candidate in candidates:
-        resolved = candidate.resolve()
-        if resolved.exists():
-            return str(resolved)
+        if candidate.exists():
+            return str(candidate)
 
     if normalized:
-        tried = ", ".join(str(p.resolve()) for p in candidates)
+        tried = ", ".join(str(candidate) for candidate in candidates)
         print(f"[WARN] bg image not found, tried: {tried}")
     return ""
 
