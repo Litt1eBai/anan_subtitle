@@ -1,3 +1,4 @@
+import os
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -5,6 +6,7 @@ from unittest.mock import patch
 from presentation.qt.settings_window_actions import (
     build_overlay_config_updates,
     build_settings_config_updates,
+    build_storage_config_updates,
     run_model_download_requests,
     write_settings_config,
 )
@@ -25,8 +27,28 @@ class BuildOverlayConfigUpdatesTests(unittest.TestCase):
         self.assertEqual(updates, {"x": 10, "y": 20, "font_size": 32})
 
 
+class BuildStorageConfigUpdatesTests(unittest.TestCase):
+    def test_includes_storage_fields(self) -> None:
+        updates = build_storage_config_updates(
+            data_dir_location="user",
+            data_dir_custom="",
+            log_dir_location="custom",
+            log_dir_custom="D:/logs",
+        )
+
+        self.assertEqual(
+            updates,
+            {
+                "data_dir_location": "user",
+                "data_dir_custom": "",
+                "log_dir_location": "custom",
+                "log_dir_custom": "D:/logs",
+            },
+        )
+
+
 class BuildSettingsConfigUpdatesTests(unittest.TestCase):
-    def test_combines_overlay_and_model_updates(self) -> None:
+    def test_combines_overlay_model_and_storage_updates(self) -> None:
         selection = build_model_selection_state(
             model="asr",
             detector_model="detector",
@@ -41,6 +63,10 @@ class BuildSettingsConfigUpdatesTests(unittest.TestCase):
             model_profile="hybrid",
             model_download_on_startup=True,
             selection=selection,
+            data_dir_location="app",
+            data_dir_custom="",
+            log_dir_location="custom",
+            log_dir_custom="C:/logs",
         )
 
         self.assertEqual(updates["x"], 1)
@@ -49,6 +75,8 @@ class BuildSettingsConfigUpdatesTests(unittest.TestCase):
         self.assertTrue(updates["model_download_on_startup"])
         self.assertEqual(updates["model"], "asr")
         self.assertEqual(updates["detector_model"], "detector")
+        self.assertEqual(updates["data_dir_location"], "app")
+        self.assertEqual(updates["log_dir_custom"], "C:/logs")
         self.assertNotIn("ignored", updates)
 
 
@@ -71,6 +99,10 @@ class WriteSettingsConfigTests(unittest.TestCase):
                 model_profile="custom",
                 model_download_on_startup=False,
                 selection=selection,
+                data_dir_location="user",
+                data_dir_custom="",
+                log_dir_location="user",
+                log_dir_custom="",
             )
 
         write_mock.assert_called_once_with(
@@ -87,6 +119,10 @@ class WriteSettingsConfigTests(unittest.TestCase):
                 "punc_model": "punc",
                 "disable_vad_model": False,
                 "disable_punc_model": False,
+                "data_dir_location": "user",
+                "data_dir_custom": "",
+                "log_dir_location": "user",
+                "log_dir_custom": "",
             },
         )
 
@@ -103,8 +139,46 @@ class RunModelDownloadRequestsTests(unittest.TestCase):
         elapsed = run_model_download_requests(
             [{"model": "a"}, {"model": "b"}],
             model_loader=fake_loader,
+            download_preparer=lambda kwargs, **_ignored: kwargs,
             perf_counter=lambda: next(perf_values),
         )
 
         self.assertEqual(calls, [{"model": "a"}, {"model": "b"}])
         self.assertEqual(elapsed, 2.5)
+
+    def test_applies_model_cache_environment_when_data_dir_is_given(self) -> None:
+        calls: list[dict[str, str]] = []
+
+        def fake_loader(**kwargs: str) -> None:
+            calls.append(kwargs)
+
+        with patch.dict(os.environ, {}, clear=True):
+            elapsed = run_model_download_requests(
+                [{"model": "a"}],
+                data_dir=Path("tests/.tmp/data"),
+                model_loader=fake_loader,
+                download_preparer=lambda kwargs, **_ignored: kwargs,
+                perf_counter=lambda: 1.0,
+            )
+            self.assertIn("MODELSCOPE_CACHE", os.environ)
+
+        self.assertEqual(calls, [{"model": "a"}])
+        self.assertEqual(elapsed, 0.0)
+
+    def test_prepares_download_before_loading(self) -> None:
+        calls: list[dict[str, str]] = []
+
+        def fake_loader(**kwargs: str) -> None:
+            calls.append(kwargs)
+
+        def fake_preparer(kwargs: dict[str, str], **_ignored) -> dict[str, str]:
+            return {"model": kwargs["model"], "model_path": "C:/models/a"}
+
+        run_model_download_requests(
+            [{"model": "a"}],
+            model_loader=fake_loader,
+            download_preparer=fake_preparer,
+            perf_counter=lambda: 1.0,
+        )
+
+        self.assertEqual(calls, [{"model": "a", "model_path": "C:/models/a"}])

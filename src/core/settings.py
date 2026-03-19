@@ -20,6 +20,17 @@ DEFAULT_CONFIG_TEMPLATE_FILENAME = "default.yaml"
 DEFAULT_CONFIG_PATH = f"{DEFAULT_CONFIG_DIR}/{DEFAULT_CONFIG_FILENAME}"
 DEFAULT_CONFIG_TEMPLATE_PATH = f"{DEFAULT_CONFIG_DIR}/{DEFAULT_CONFIG_TEMPLATE_FILENAME}"
 
+STORAGE_LOCATION_APP = "app"
+STORAGE_LOCATION_USER = "user"
+STORAGE_LOCATION_CUSTOM = "custom"
+STORAGE_LOCATION_CHOICES = (
+    STORAGE_LOCATION_APP,
+    STORAGE_LOCATION_USER,
+    STORAGE_LOCATION_CUSTOM,
+)
+DEFAULT_DATA_DIR_NAME = "data"
+DEFAULT_LOG_DIR_NAME = "logs"
+
 MODEL_PROFILE_PRESETS: dict[str, dict[str, Any]] = {
     "realtime": {
         "label": "实时",
@@ -76,6 +87,12 @@ def get_resource_root() -> Path:
     if hasattr(sys, "_MEIPASS"):
         return Path(getattr(sys, "_MEIPASS")).resolve()
     return Path(__file__).resolve().parents[2]
+
+
+def get_app_install_dir() -> Path:
+    if is_frozen_runtime():
+        return Path(sys.executable).resolve().parent
+    return get_resource_root()
 
 
 def get_user_data_dir() -> Path:
@@ -142,6 +159,44 @@ def _iter_image_candidates(normalized: str, config_path: Path) -> list[Path]:
     return unique
 
 
+def parse_storage_location(location: Any) -> str:
+    normalized = str(location).strip().lower()
+    if normalized not in STORAGE_LOCATION_CHOICES:
+        joined = ", ".join(STORAGE_LOCATION_CHOICES)
+        raise ValueError(f"Invalid storage location '{location}', expected one of: {joined}")
+    return normalized
+
+
+def resolve_storage_base_dir(location: str, custom_path: str | Path = "") -> Path:
+    normalized = parse_storage_location(location)
+    if normalized == STORAGE_LOCATION_APP:
+        return get_app_install_dir().resolve()
+    if normalized == STORAGE_LOCATION_USER:
+        return get_user_data_dir().resolve()
+
+    custom = str(custom_path).strip()
+    if not custom:
+        return get_user_data_dir().resolve()
+    return Path(custom).expanduser().resolve()
+
+
+def resolve_data_dir(location: str, custom_path: str | Path = "") -> Path:
+    return (resolve_storage_base_dir(location, custom_path) / DEFAULT_DATA_DIR_NAME).resolve()
+
+
+def resolve_log_dir(location: str, custom_path: str | Path = "") -> Path:
+    return (resolve_storage_base_dir(location, custom_path) / DEFAULT_LOG_DIR_NAME).resolve()
+
+
+def apply_storage_paths_to_args(args: argparse.Namespace) -> None:
+    args.data_dir_location = parse_storage_location(getattr(args, "data_dir_location", STORAGE_LOCATION_USER))
+    args.log_dir_location = parse_storage_location(getattr(args, "log_dir_location", STORAGE_LOCATION_USER))
+    args.data_dir_custom = str(getattr(args, "data_dir_custom", ""))
+    args.log_dir_custom = str(getattr(args, "log_dir_custom", ""))
+    args.data_dir = str(resolve_data_dir(args.data_dir_location, args.data_dir_custom))
+    args.log_dir = str(resolve_log_dir(args.log_dir_location, args.log_dir_custom))
+
+
 def ensure_runtime_config_file(path: str | Path) -> Path:
     resolved = ensure_runtime_config_path(path)
     if not resolved.exists():
@@ -178,6 +233,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "bg_offset_y": 0,
     "show_control_panel": False,
     "tray_icon_enable": True,
+    "data_dir_location": "user",
+    "data_dir_custom": "",
+    "log_dir_location": "user",
+    "log_dir_custom": "",
     "device": None,
     "samplerate": 16000,
     "block_ms": 100,
@@ -312,6 +371,10 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         "vad_model",
         "punc_model",
         "model_profile",
+        "data_dir_location",
+        "data_dir_custom",
+        "log_dir_location",
+        "log_dir_custom",
     }
 
     def parse_bool(value: Any) -> bool:
@@ -339,6 +402,8 @@ def normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
             normalized[key] = float(value)
         elif key == "model_profile":
             normalized[key] = parse_model_profile(value)
+        elif key in {"data_dir_location", "log_dir_location"}:
+            normalized[key] = parse_storage_location(value)
         elif key in bool_fields:
             normalized[key] = parse_bool(value)
         elif key in str_fields:
@@ -532,6 +597,33 @@ def parse_args() -> argparse.Namespace:
     )
     parser.set_defaults(tray_icon_enable=defaults["tray_icon_enable"])
 
+    parser.add_argument(
+        "--data-dir-location",
+        type=parse_storage_location,
+        choices=STORAGE_LOCATION_CHOICES,
+        default=defaults["data_dir_location"],
+        help="data/cache storage location: app, user, custom",
+    )
+    parser.add_argument(
+        "--data-dir-custom",
+        type=str,
+        default=defaults["data_dir_custom"],
+        help="custom base path for data/cache storage when data-dir-location=custom",
+    )
+    parser.add_argument(
+        "--log-dir-location",
+        type=parse_storage_location,
+        choices=STORAGE_LOCATION_CHOICES,
+        default=defaults["log_dir_location"],
+        help="log storage location: app, user, custom",
+    )
+    parser.add_argument(
+        "--log-dir-custom",
+        type=str,
+        default=defaults["log_dir_custom"],
+        help="custom base path for log storage when log-dir-location=custom",
+    )
+
     parser.add_argument("--device", type=int, default=defaults["device"])
     parser.add_argument("--samplerate", type=int, default=defaults["samplerate"])
     parser.add_argument("--block-ms", type=int, default=defaults["block_ms"])
@@ -640,6 +732,7 @@ def parse_args() -> argparse.Namespace:
     if has_model_override and not has_profile_override:
         args.model_profile = MODEL_PROFILE_CUSTOM
     apply_model_profile_to_args(args)
+    apply_storage_paths_to_args(args)
     args.config = str(config_path)
     return args
 

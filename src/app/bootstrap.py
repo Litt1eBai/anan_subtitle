@@ -13,9 +13,12 @@ from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFormLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QProgressDialog,
     QRadioButton,
@@ -23,10 +26,19 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from recognition.engine import ASRWorker
-from core.settings import MODEL_PROFILE_PRESETS
-from core.settings import apply_model_profile_to_args
-from core.settings import write_config_values
+from core.model_download import ensure_model_download_ready
+from core.runtime_env import apply_runtime_environment, configure_logging
+from core.settings import (
+    MODEL_PROFILE_PRESETS,
+    STORAGE_LOCATION_APP,
+    STORAGE_LOCATION_CUSTOM,
+    STORAGE_LOCATION_USER,
+    apply_model_profile_to_args,
+    apply_storage_paths_to_args,
+    resolve_data_dir,
+    resolve_log_dir,
+    write_config_values,
+)
 from core.models import (
     MODEL_PROFILE_CUSTOM,
     MODEL_PROFILE_HYBRID,
@@ -35,6 +47,7 @@ from core.models import (
 )
 from presentation import SubtitlePresentationController
 from presentation.qt import OverlayControlPanel, SubtitleOverlay, TrayController
+from recognition.engine import ASRWorker
 
 
 class AppSignals(QObject):
@@ -74,22 +87,55 @@ def build_model_download_kwargs_list(args: Any) -> list[dict[str, object]]:
     return downloads
 
 
-def download_selected_model_combo(args: Any) -> bool:
+def download_selected_model_combo(args: Any) -> tuple[bool, str]:
     downloads = build_model_download_kwargs_list(args)
     start = time.perf_counter()
-    LOGGER.info("Pre-downloading model combo (profile=%s)", args.model_profile)
+    LOGGER.info("Pre-downloading model combo (profile=%s, data_dir=%s)", args.model_profile, getattr(args, "data_dir", ""))
     for kwargs in downloads:
-        model_name = kwargs.get("model", "<unknown>")
+        model_name = str(kwargs.get("model", "<unknown>"))
+        prepared_kwargs: dict[str, object] | None = None
         try:
             LOGGER.info("Downloading model: %s", model_name)
-            AutoModel(**kwargs)
+            prepared_kwargs = ensure_model_download_ready(
+                kwargs,
+                modelscope_cache_dir=getattr(args, "modelscope_cache_dir", None),
+            )
+            AutoModel(**prepared_kwargs)
         except Exception as exc:  # pylint: disable=broad-except
+            detail = f"{model_name}: {exc}"
+            if prepared_kwargs and prepared_kwargs.get("model_path"):
+                detail += f" (model_path={prepared_kwargs.get('model_path')})"
             LOGGER.exception("Model pre-download failed")
             LOGGER.warning("Model pre-download skipped (%s): %s", model_name, exc)
-            return False
+            return False, detail
     elapsed = time.perf_counter() - start
     LOGGER.info("Model combo is ready (elapsed=%.1fs)", elapsed)
-    return True
+    return True, f"模型下载完成（{elapsed:.1f}s）"
+
+
+def persist_storage_preferences(
+    args: Any,
+    config_path: Path,
+    *,
+    data_dir_location: str,
+    data_dir_custom: str,
+    log_dir_location: str,
+    log_dir_custom: str,
+) -> None:
+    args.data_dir_location = data_dir_location
+    args.data_dir_custom = data_dir_custom
+    args.log_dir_location = log_dir_location
+    args.log_dir_custom = log_dir_custom
+    apply_storage_paths_to_args(args)
+    write_config_values(
+        config_path,
+        {
+            "data_dir_location": args.data_dir_location,
+            "data_dir_custom": args.data_dir_custom,
+            "log_dir_location": args.log_dir_location,
+            "log_dir_custom": args.log_dir_custom,
+        },
+    )
 
 
 def persist_model_profile_selection(args: Any, config_path: Path, selected_profile: str) -> None:
@@ -139,8 +185,22 @@ def prompt_model_profile_on_first_run_terminal(args: Any, config_path: Path) -> 
         print("是否立即下载所选模型？建议首次选择 yes。")
         download_answer = input("立即下载 [Y/n]: ").strip().lower()
         if download_answer in {"", "y", "yes"}:
-            download_selected_model_combo(args)
+            ok, detail = download_selected_model_combo(args)
+            if not ok:
+                print(f"[WARN] 模型下载失败: {detail}")
+                if getattr(args, "log_file", ""):
+                    print(f"[WARN] 日志文件: {args.log_file}")
     return True
+
+
+def _build_storage_location_combo(current_value: str) -> QComboBox:
+    combo = QComboBox()
+    combo.addItem("软件目录", STORAGE_LOCATION_APP)
+    combo.addItem("用户目录", STORAGE_LOCATION_USER)
+    combo.addItem("自定义", STORAGE_LOCATION_CUSTOM)
+    index = combo.findData(current_value)
+    combo.setCurrentIndex(index if index >= 0 else combo.findData(STORAGE_LOCATION_USER))
+    return combo
 
 
 def prompt_model_profile_on_first_run_gui(args: Any, config_path: Path) -> bool:
@@ -151,10 +211,11 @@ def prompt_model_profile_on_first_run_gui(args: Any, config_path: Path) -> bool:
     dialog = QDialog()
     dialog.setWindowTitle("首次启动设置")
     dialog.setModal(True)
+    dialog.resize(560, 420)
 
     layout = QVBoxLayout(dialog)
     layout.addWidget(QLabel("首次启动需要选择识别模式。建议保持默认的实时模式。"))
-    layout.addWidget(QLabel("勾选“立即下载模型”后，将在进入主界面前完成模型准备。"))
+    layout.addWidget(QLabel("你也可以在这里决定模型缓存和日志写到哪里。"))
 
     options = {
         MODEL_PROFILE_REALTIME: QRadioButton(
@@ -180,6 +241,41 @@ def prompt_model_profile_on_first_run_gui(args: Any, config_path: Path) -> bool:
     download_checkbox.setChecked(True)
     layout.addWidget(download_checkbox)
 
+    storage_form = QFormLayout()
+    data_location_combo = _build_storage_location_combo(str(getattr(args, "data_dir_location", STORAGE_LOCATION_USER)))
+    data_custom_edit = QLineEdit(str(getattr(args, "data_dir_custom", "")))
+    log_location_combo = _build_storage_location_combo(str(getattr(args, "log_dir_location", STORAGE_LOCATION_USER)))
+    log_custom_edit = QLineEdit(str(getattr(args, "log_dir_custom", "")))
+    storage_form.addRow("数据目录", data_location_combo)
+    storage_form.addRow("数据自定义路径", data_custom_edit)
+    storage_form.addRow("日志目录", log_location_combo)
+    storage_form.addRow("日志自定义路径", log_custom_edit)
+    layout.addLayout(storage_form)
+
+    storage_summary = QLabel("")
+    storage_summary.setWordWrap(True)
+    layout.addWidget(storage_summary)
+
+    def refresh_storage_summary() -> None:
+        data_location = str(data_location_combo.currentData())
+        log_location = str(log_location_combo.currentData())
+        data_custom = data_custom_edit.text().strip()
+        log_custom = log_custom_edit.text().strip()
+        data_custom_edit.setEnabled(data_location == STORAGE_LOCATION_CUSTOM)
+        log_custom_edit.setEnabled(log_location == STORAGE_LOCATION_CUSTOM)
+        storage_summary.setText(
+            "数据目录: "
+            f"{resolve_data_dir(data_location, data_custom)}\n"
+            "日志目录: "
+            f"{resolve_log_dir(log_location, log_custom)}"
+        )
+
+    data_location_combo.currentIndexChanged.connect(lambda _i: refresh_storage_summary())
+    log_location_combo.currentIndexChanged.connect(lambda _i: refresh_storage_summary())
+    data_custom_edit.textChanged.connect(lambda _t: refresh_storage_summary())
+    log_custom_edit.textChanged.connect(lambda _t: refresh_storage_summary())
+    refresh_storage_summary()
+
     buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
     buttons.accepted.connect(dialog.accept)
     buttons.rejected.connect(dialog.reject)
@@ -187,6 +283,21 @@ def prompt_model_profile_on_first_run_gui(args: Any, config_path: Path) -> bool:
 
     if dialog.exec() != int(QDialog.DialogCode.Accepted):
         LOGGER.info("First-run model profile prompt cancelled")
+        return False
+
+    persist_storage_preferences(
+        args,
+        config_path,
+        data_dir_location=str(data_location_combo.currentData()),
+        data_dir_custom=data_custom_edit.text().strip(),
+        log_dir_location=str(log_location_combo.currentData()),
+        log_dir_custom=log_custom_edit.text().strip(),
+    )
+    try:
+        apply_runtime_environment(args)
+        args.log_file = str(configure_logging(args.log_dir))
+    except Exception as exc:  # pylint: disable=broad-except
+        QMessageBox.critical(dialog, "目录初始化失败", f"无法准备数据或日志目录：{exc}")
         return False
 
     chosen = next(profile for profile, button in options.items() if button.isChecked())
@@ -202,14 +313,17 @@ def prompt_model_profile_on_first_run_gui(args: Any, config_path: Path) -> bool:
         progress.setAutoReset(False)
         progress.show()
         qt_app.processEvents()
-        downloaded = download_selected_model_combo(args)
+        downloaded, detail = download_selected_model_combo(args)
         progress.close()
         qt_app.processEvents()
         if not downloaded:
             QMessageBox.warning(
                 dialog,
                 "模型下载失败",
-                "所选模型未能预下载完成。你可以稍后在设置面板中重新下载，或检查网络后重试。",
+                "所选模型未能预下载完成。\n\n"
+                f"原因: {detail}\n"
+                f"日志: {getattr(args, 'log_file', '')}\n\n"
+                "你可以稍后在设置面板中重新下载，或检查网络和目录权限后重试。",
             )
 
     return True

@@ -9,15 +9,23 @@ import core.settings as settings
 from core.models import MODEL_PROFILE_OFFLINE, MODEL_PROFILE_REALTIME
 from core.settings import (
     DEFAULT_CONFIG_TEMPLATE_PATH,
+    STORAGE_LOCATION_APP,
+    STORAGE_LOCATION_CUSTOM,
+    STORAGE_LOCATION_USER,
     apply_model_profile_to_args,
     apply_model_profile_to_settings,
+    apply_storage_paths_to_args,
     ensure_runtime_config_file,
     ensure_runtime_config_path,
     ensure_valid_image,
+    get_app_install_dir,
     get_default_runtime_config_path,
+    get_user_data_dir,
     is_template_config_path,
     normalize_config,
     parse_chunk_size,
+    resolve_data_dir,
+    resolve_log_dir,
     resolve_runtime_config_path,
     write_config_values,
 )
@@ -165,6 +173,39 @@ class EnsureValidImageTests(unittest.TestCase):
             self.assertEqual(resolved, str(image_path.resolve()))
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+class StoragePathTests(unittest.TestCase):
+    def test_normalize_config_accepts_storage_locations(self) -> None:
+        normalized = normalize_config(
+            {
+                "data_dir_location": "app",
+                "data_dir_custom": "D:/cache",
+                "log_dir_location": "custom",
+                "log_dir_custom": "D:/logs",
+            }
+        )
+        self.assertEqual(normalized["data_dir_location"], STORAGE_LOCATION_APP)
+        self.assertEqual(normalized["log_dir_location"], STORAGE_LOCATION_CUSTOM)
+
+    def test_resolve_storage_dirs_use_expected_roots(self) -> None:
+        self.assertEqual(resolve_data_dir(STORAGE_LOCATION_USER), (get_user_data_dir() / "data").resolve())
+        self.assertEqual(resolve_log_dir(STORAGE_LOCATION_APP), (get_app_install_dir() / "logs").resolve())
+        self.assertEqual(
+            resolve_data_dir(STORAGE_LOCATION_CUSTOM, "D:/custom"),
+            Path("D:/custom").expanduser().resolve() / "data",
+        )
+
+    def test_apply_storage_paths_to_args_sets_resolved_dirs(self) -> None:
+        args = argparse.Namespace(
+            data_dir_location=STORAGE_LOCATION_CUSTOM,
+            data_dir_custom="D:/cache",
+            log_dir_location=STORAGE_LOCATION_USER,
+            log_dir_custom="",
+        )
+        apply_storage_paths_to_args(args)
+        self.assertEqual(args.data_dir, str((Path("D:/cache").expanduser().resolve() / "data").resolve()))
+        self.assertEqual(args.log_dir, str((get_user_data_dir() / "logs").resolve()))
 
 
 class WriteConfigValuesTests(unittest.TestCase):

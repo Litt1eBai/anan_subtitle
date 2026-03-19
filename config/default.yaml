@@ -58,6 +58,15 @@ show_control_panel: false
 # Enable Windows system tray icon (recommended).
 tray_icon_enable: true
 
+# Data/cache location: app, user, custom.
+data_dir_location: user
+# Custom base path for data/cache when data_dir_location=custom.
+data_dir_custom: ""
+# Log location: app, user, custom.
+log_dir_location: user
+# Custom base path for logs when log_dir_location=custom.
+log_dir_custom: ""
+
 # Microphone device index. null means default input device.
 device: null
 # Audio sample rate. Recommended 16000 for ASR models.

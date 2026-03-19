@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -18,7 +19,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.settings import parse_model_profile
+from core.settings import (
+    STORAGE_LOCATION_APP,
+    STORAGE_LOCATION_CUSTOM,
+    STORAGE_LOCATION_USER,
+    parse_model_profile,
+    resolve_data_dir,
+    resolve_log_dir,
+)
 from core.models import (
     MODEL_PROFILE_CUSTOM,
     MODEL_PROFILE_HYBRID,
@@ -50,6 +58,10 @@ class OverlayControlPanel(QWidget):
         self._download_thread: threading.Thread | None = None
         self._model_profile = parse_model_profile(getattr(args, "model_profile", MODEL_PROFILE_REALTIME))
         self._model_download_on_startup = bool(getattr(args, "model_download_on_startup", False))
+        self._data_dir_location = str(getattr(args, "data_dir_location", STORAGE_LOCATION_USER))
+        self._data_dir_custom = str(getattr(args, "data_dir_custom", ""))
+        self._log_dir_location = str(getattr(args, "log_dir_location", STORAGE_LOCATION_USER))
+        self._log_dir_custom = str(getattr(args, "log_dir_custom", ""))
         self._model_selection = build_model_selection_state(
             model=str(getattr(args, "model", "")),
             detector_model=str(getattr(args, "detector_model", "paraformer-zh-streaming")),
@@ -65,13 +77,14 @@ class OverlayControlPanel(QWidget):
         self._connect_signals()
         self._sync_from_overlay()
         self._sync_model_controls()
+        self._sync_storage_controls()
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(8)
         self.setMinimumWidth(360)
-        self.resize(400, 560)
+        self.resize(420, 640)
 
         tip = QLabel("F2: 编辑模式。拖拽文本框移动/缩放，拖拽背景调位置。")
         tip.setWordWrap(True)
@@ -176,6 +189,23 @@ class OverlayControlPanel(QWidget):
         model_hint.setWordWrap(True)
         host_layout.addWidget(model_hint)
 
+        host_layout.addWidget(self._section_title("数据与日志"))
+        storage_form = QFormLayout()
+        storage_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        self._data_dir_location_combo = self._build_storage_location_combo()
+        self._data_dir_custom_edit = QLineEdit()
+        self._log_dir_location_combo = self._build_storage_location_combo()
+        self._log_dir_custom_edit = QLineEdit()
+        storage_form.addRow("数据目录", self._data_dir_location_combo)
+        storage_form.addRow("数据自定义路径", self._data_dir_custom_edit)
+        storage_form.addRow("日志目录", self._log_dir_location_combo)
+        storage_form.addRow("日志自定义路径", self._log_dir_custom_edit)
+        host_layout.addLayout(storage_form)
+
+        self._storage_summary_label = QLabel("")
+        self._storage_summary_label.setWordWrap(True)
+        host_layout.addWidget(self._storage_summary_label)
+
         host_layout.addStretch(1)
         root.addWidget(self._divider())
 
@@ -207,6 +237,10 @@ class OverlayControlPanel(QWidget):
         self._model_download_on_startup_checkbox.toggled.connect(self._on_model_download_startup_toggled)
         self._download_model_button.clicked.connect(self._on_download_model_clicked)
         self.model_download_finished.connect(self._on_model_download_finished)
+        self._data_dir_location_combo.currentIndexChanged.connect(self._on_storage_selection_changed)
+        self._log_dir_location_combo.currentIndexChanged.connect(self._on_storage_selection_changed)
+        self._data_dir_custom_edit.textChanged.connect(self._on_storage_custom_changed)
+        self._log_dir_custom_edit.textChanged.connect(self._on_storage_custom_changed)
         self._save_button.clicked.connect(self._save_to_config)
 
     def _divider(self) -> QFrame:
@@ -222,6 +256,12 @@ class OverlayControlPanel(QWidget):
         label.setFont(font)
         return label
 
+    def _build_storage_location_combo(self) -> QComboBox:
+        combo = QComboBox()
+        combo.addItem("软件目录", STORAGE_LOCATION_APP)
+        combo.addItem("用户目录", STORAGE_LOCATION_USER)
+        combo.addItem("自定义", STORAGE_LOCATION_CUSTOM)
+        return combo
 
     def _current_profile_from_combo(self) -> str:
         data = self._model_profile_combo.currentData()
@@ -239,6 +279,38 @@ class OverlayControlPanel(QWidget):
         self._model_summary_label.setText(
             build_model_profile_summary(self._model_profile, self._model_selection)
         )
+
+    def _resolved_data_dir(self) -> Path:
+        return resolve_data_dir(self._data_dir_location, self._data_dir_custom)
+
+    def _resolved_log_dir(self) -> Path:
+        return resolve_log_dir(self._log_dir_location, self._log_dir_custom)
+
+    def _refresh_storage_summary(self) -> None:
+        self._data_dir_custom_edit.setEnabled(self._data_dir_location == STORAGE_LOCATION_CUSTOM)
+        self._log_dir_custom_edit.setEnabled(self._log_dir_location == STORAGE_LOCATION_CUSTOM)
+        self._storage_summary_label.setText(
+            f"数据目录: {self._resolved_data_dir()}\n日志目录: {self._resolved_log_dir()}"
+        )
+
+    def _sync_storage_controls(self) -> None:
+        self._syncing = True
+        try:
+            data_index = self._data_dir_location_combo.findData(self._data_dir_location)
+            if data_index < 0:
+                data_index = self._data_dir_location_combo.findData(STORAGE_LOCATION_USER)
+                self._data_dir_location = STORAGE_LOCATION_USER
+            log_index = self._log_dir_location_combo.findData(self._log_dir_location)
+            if log_index < 0:
+                log_index = self._log_dir_location_combo.findData(STORAGE_LOCATION_USER)
+                self._log_dir_location = STORAGE_LOCATION_USER
+            self._data_dir_location_combo.setCurrentIndex(data_index)
+            self._data_dir_custom_edit.setText(self._data_dir_custom)
+            self._log_dir_location_combo.setCurrentIndex(log_index)
+            self._log_dir_custom_edit.setText(self._log_dir_custom)
+            self._refresh_storage_summary()
+        finally:
+            self._syncing = False
 
     def _sync_model_controls(self) -> None:
         self._syncing = True
@@ -281,11 +353,12 @@ class OverlayControlPanel(QWidget):
         downloads = self._build_model_download_kwargs_list()
         self._download_model_button.setEnabled(False)
         names = ", ".join(str(item.get("model", "")) for item in downloads)
-        self._status_label.setText(f"下载中: {names} ...")
+        target_dir = self._resolved_data_dir()
+        self._status_label.setText(f"下载中: {names} ...\n数据目录: {target_dir}")
 
         def worker() -> None:
             try:
-                elapsed = run_model_download_requests(downloads)
+                elapsed = run_model_download_requests(downloads, data_dir=target_dir)
             except Exception as exc:  # pylint: disable=broad-except
                 self.model_download_finished.emit(False, f"模型下载失败: {exc}")
                 return
@@ -296,10 +369,9 @@ class OverlayControlPanel(QWidget):
 
     def _on_model_download_finished(self, ok: bool, message: str) -> None:
         self._download_model_button.setEnabled(True)
-        if ok:
-            self._status_label.setText(message)
-            return
         self._status_label.setText(message)
+        if not ok:
+            self._status_label.setText(f"{message}\n日志目录: {self._resolved_log_dir()}")
 
     def _sync_from_overlay(self, settings: dict[str, Any] | None = None) -> None:
         del settings
@@ -370,6 +442,20 @@ class OverlayControlPanel(QWidget):
             return
         self._overlay.set_bg_size(self._bg_w_spin.value(), self._bg_h_spin.value())
 
+    def _on_storage_selection_changed(self, _index: int) -> None:
+        if self._syncing:
+            return
+        self._data_dir_location = str(self._data_dir_location_combo.currentData())
+        self._log_dir_location = str(self._log_dir_location_combo.currentData())
+        self._refresh_storage_summary()
+
+    def _on_storage_custom_changed(self, _value: str) -> None:
+        if self._syncing:
+            return
+        self._data_dir_custom = self._data_dir_custom_edit.text().strip()
+        self._log_dir_custom = self._log_dir_custom_edit.text().strip()
+        self._refresh_storage_summary()
+
     def _save_to_config(self) -> None:
         try:
             overlay_settings = self._overlay.export_runtime_settings()
@@ -381,8 +467,16 @@ class OverlayControlPanel(QWidget):
                 model_profile=self._model_profile,
                 model_download_on_startup=self._model_download_on_startup,
                 selection=self._model_selection,
+                data_dir_location=self._data_dir_location,
+                data_dir_custom=self._data_dir_custom,
+                log_dir_location=self._log_dir_location,
+                log_dir_custom=self._log_dir_custom,
             )
-            self._status_label.setText(f"已保存: {self._config_path}（模型切换需重启生效）")
+            self._status_label.setText(
+                f"已保存: {self._config_path}（模型切换需重启生效）\n"
+                f"数据目录: {self._resolved_data_dir()}\n"
+                f"日志目录: {self._resolved_log_dir()}"
+            )
         except Exception as exc:  # pylint: disable=broad-except
             self._status_label.setText(f"保存失败: {exc}")
 
@@ -393,4 +487,3 @@ class OverlayControlPanel(QWidget):
     def hideEvent(self, event) -> None:  # noqa: N802
         super().hideEvent(event)
         self.visibility_changed.emit(False)
-
