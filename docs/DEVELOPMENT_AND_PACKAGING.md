@@ -110,6 +110,31 @@ dist/anan_subtitle/
 - 用户运行时需要整个目录，不是单独一个 `exe`
 - `_internal/` 不可删除
 
+### 快速清理
+
+默认清理以下内容：
+
+- `build/`
+- `dist/`
+- `tests/.tmp`
+- `tests/tmp_*`
+- 项目内 `__pycache__`
+- 项目内 `*.pyc`
+
+命令：
+
+```powershell
+.\scripts\clean.ps1
+```
+
+如果要同时清掉打包版用户目录数据，并重新触发首次启动流程：
+
+```powershell
+.\scripts\clean.ps1 -IncludeUserData
+```
+
+`-IncludeUserData` 会删除 `%LOCALAPPDATA%\anan_subtitle\` 下的运行态配置、日志和模型缓存。
+
 ### 打包资源
 
 当前随包带上的项目资源包括：
@@ -121,6 +146,10 @@ dist/anan_subtitle/
 
 - 打包版默认在 `%LOCALAPPDATA%\anan_subtitle\config\app.yaml` 生成用户配置
 - 首次运行若没有配置，会从包内模板生成
+- 打包版默认数据目录：`%LOCALAPPDATA%\anan_subtitle\data`
+- 打包版默认日志目录：`%LOCALAPPDATA%\anan_subtitle\logs`
+- 首次启动和设置面板都支持把数据目录、日志目录改为软件目录 / 用户目录 / 自定义目录
+- 默认日志文件：`desktop_subtitle.log`
 
 ## 3. 发布前检查
 
@@ -130,6 +159,7 @@ dist/anan_subtitle/
 2. 运行 `scripts/build_windows.ps1`
 3. 按 `docs/SMOKE_TEST.md` 做人工冒烟
 4. 确认发布目录包含合规文件
+5. 确认首次下载失败时，界面能显示错误详情和日志路径
 
 ## 4. 合规文件
 

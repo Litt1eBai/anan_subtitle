@@ -31,6 +31,7 @@
 - 命令行参数覆盖配置文件
 - 运行时窗口布局可保存回配置文件（源码运行默认写回 `config/app.yaml`，打包版默认写到用户目录）
 - 首次启动可交互选择模型组合（源码终端走命令行，打包版走 GUI 对话框）
+- 数据目录和日志目录支持 3 种位置：软件目录、用户目录、自定义目录
 
 ## 一键启动（推荐）
 
@@ -81,6 +82,16 @@ python src/main.py --config config\app.yaml --font-size 36 --x 100 --y 100
 
 打包版默认会把运行态配置写到用户目录：`%LOCALAPPDATA%\anan_subtitle\config\app.yaml`。首次启动若不存在，会从包内的 `default.yaml` 自动生成。
 
+数据目录和日志目录支持以下位置策略：
+- `app`：软件目录
+- `user`：用户目录（默认）
+- `custom`：自定义目录
+
+默认路径：
+- 打包版数据目录：`%LOCALAPPDATA%\anan_subtitle\data`
+- 打包版日志目录：`%LOCALAPPDATA%\anan_subtitle\logs`
+- 日志文件：`desktop_subtitle.log`
+
 常用配置组：
 - 窗口：`x`, `y`, `width`, `height`, `lock_size_to_bg`, `windowed_mode`, `stay_on_top`, `opacity`
 - 字幕：`font_family`, `font_size`, `text_color`, `text_*`, `text_anim_*`, `subtitle_clear_ms`
@@ -99,6 +110,8 @@ python src/main.py --config config\app.yaml --font-size 36 --x 100 --y 100
 
 首次运行会提示选择模型组合，并写回当前运行态配置文件。打包版首次启动会弹出 GUI 对话框，并可立即下载所选模型。  
 如需每次启动前预下载模型，可设置 `model_download_on_startup: true`。
+
+如果首次模型下载失败，错误详情和日志文件路径会直接显示在界面提示里；可优先检查网络、目录权限，以及日志目录中的 `desktop_subtitle.log`。
 
 ## 常用命令
 
@@ -143,6 +156,18 @@ python src/main.py --config config\app.yaml --model-profile hybrid
 
 构建完成后，产物位于 `dist\anan_subtitle\`，主程序是 `dist\anan_subtitle\anan_subtitle.exe`。
 
+快速清理构建产物和测试缓存：
+
+```powershell
+.\scripts\clean.ps1
+```
+
+如果需要连同打包版用户目录下的配置、日志和模型缓存一起清掉，并重新触发首次启动向导：
+
+```powershell
+.\scripts\clean.ps1 -IncludeUserData
+```
+
 当前打包链路会把这些资源一起带上：
 - `config/default.yaml`
 - `config/base.png`
@@ -157,6 +182,7 @@ python src/main.py --config config\app.yaml --model-profile hybrid
 - `Offline latency (final/silence|max-segment-seconds)`：句子最终结果延迟
 - 指标说明：`lag`（超出音频时长的额外等待）、`tail`（最近音频到输出的等待）、`infer`（推理耗时）
 - `Offline latency summary`：每 5 句输出平均值和 `p95_tail`
+- 打包版默认日志位置：`%LOCALAPPDATA%\anan_subtitle\logs\desktop_subtitle.log`
 
 ## 备注
 
