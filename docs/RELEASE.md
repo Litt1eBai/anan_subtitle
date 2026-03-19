@@ -1,6 +1,12 @@
 # RELEASE
 
-本文档描述当前项目的发布建议、打标签方式，以及正式版前需要补齐的事项。
+本文档只描述版本发布流程和发布要求。
+
+如果你想看：
+
+- 文档总入口： [INDEX.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/INDEX.md)
+- 开发与打包： [DEVELOPMENT_AND_PACKAGING.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/DEVELOPMENT_AND_PACKAGING.md)
+- 冒烟执行项： [SMOKE_TEST.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/SMOKE_TEST.md)
 
 ## 当前建议的发布级别
 
@@ -83,19 +89,7 @@ $env:PYTHONPATH='src'
 .\.venv\Scripts\python.exe -m compileall src
 ```
 
-如果后续补了打包流程，还应加入：
-
-- `exe` 构建验证
-- 安装后启动验证
-
-当前构建命令：
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-build-lock.txt
-.\scripts\build_windows.ps1
-```
-
-构建脚本会调用 `pyinstaller.spec`，输出 `dist\anan_subtitle\` 目录，并复制 `LICENSE`、`README.md` 以及已有的发布辅助文档。
+然后再按 [DEVELOPMENT_AND_PACKAGING.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/DEVELOPMENT_AND_PACKAGING.md) 执行打包，并按 [SMOKE_TEST.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/SMOKE_TEST.md) 做人工冒烟。
 
 当前发布包应随附的合规文档：
 

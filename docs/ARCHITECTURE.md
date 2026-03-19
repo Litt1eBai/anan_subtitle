@@ -2,6 +2,8 @@
 
 本文档描述项目的目标架构，也就是后续功能开发默认遵循的结构边界。
 
+如果你想看文档总入口，请查看 [INDEX.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/INDEX.md)。
+
 项目目标不是实现教科书式的完整 Clean Architecture，而是在不过度设计的前提下，得到一套足够干净、可维护、可扩展的工程结构：
 
 - 核心业务围绕 FunASR 语音识别展开

@@ -1,6 +1,13 @@
 # DEVELOPMENT AND PACKAGING
 
-本文档描述当前项目的开发流程与 Windows 打包流程。
+本文档只描述开发与打包流程。
+
+如果你想看：
+
+- 文档总入口： [INDEX.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/INDEX.md)
+- 架构与现状： [ARCHITECTURE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/ARCHITECTURE.md)、[CURRENT_ARCHITECTURE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/CURRENT_ARCHITECTURE.md)
+- 发布流程： [RELEASE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/RELEASE.md)
+- 冒烟清单： [SMOKE_TEST.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/SMOKE_TEST.md)
 
 ## 1. 开发流程
 
@@ -151,17 +158,7 @@ dist/anan_subtitle/
 - 首次启动和设置面板都支持把数据目录、日志目录改为软件目录 / 用户目录 / 自定义目录
 - 默认日志文件：`desktop_subtitle.log`
 
-## 3. 发布前检查
-
-打包完成后，至少执行：
-
-1. 跑测试
-2. 运行 `scripts/build_windows.ps1`
-3. 按 `docs/SMOKE_TEST.md` 做人工冒烟
-4. 确认发布目录包含合规文件
-5. 确认首次下载失败时，界面能显示错误详情和日志路径
-
-## 4. 合规文件
+## 3. 合规文件
 
 当前发布目录应包含：
 
@@ -176,6 +173,6 @@ dist/anan_subtitle/
 - `MODEL_SOURCES.md`：默认模型组合与来源说明
 - `PYSIDE6_LGPL_NOTICE.md`：PySide6 / Qt LGPL 分发提示
 
-## 5. 一句话结论
+## 4. 一句话结论
 
 开发时跑源码入口，发布时跑 `build_windows.ps1`，最终对外分发的是整个 `dist/anan_subtitle/` 目录。

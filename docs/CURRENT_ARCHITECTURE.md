@@ -2,6 +2,8 @@
 
 本文档记录当前代码库的真实实现结构，用于帮助开发时理解现状、定位代码和评估变更影响。
 
+如果你想看文档总入口，请查看 [INDEX.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/INDEX.md)。
+
 如果你想看目标边界，请查看 [ARCHITECTURE.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/ARCHITECTURE.md)。
 如果你想看下一阶段工作，请查看 [NEXT_TARGET.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/NEXT_TARGET.md)。
 

@@ -2,6 +2,8 @@
 
 发布前至少执行一轮人工冒烟，确认 Windows 打包产物可正常运行。
 
+如果你想看文档总入口，请查看 [INDEX.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/INDEX.md)。
+
 ## 构建前
 
 - 工作区干净

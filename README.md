@@ -1,227 +1,79 @@
 # 桌面实时字幕软件（FunASR）
 
-基于 FunASR 的桌面实时字幕工具，支持流式识别、透明背景叠加字幕、托盘控制与可视化调参。
+基于 FunASR 的 Windows 桌面字幕工具，支持：
 
-当前建议发布版本：`v0.2.0`。定位为重构收尾后的源码版开发基线，不是面向普通用户的正式安装版。
+- 麦克风实时采集
+- 实时 / 非实时识别
+- 桌面透明字幕渲染
+- 托盘控制与设置面板
+- 首次启动模型选择与模型下载
 
-## 功能
+当前代码库已经完成主要重构，适合作为后续功能开发和发布准备的稳定基线。
 
-### 1) 实时采集
-- 麦克风实时采集（`sounddevice.InputStream`）
-- 队列缓冲与溢出保护（满队列丢旧帧，保留最新音频）
+## 快速开始
 
-### 2) 实时识别
-- 流式识别（默认 `paraformer-zh-streaming`）
-- 离线分段识别（非 streaming 模型）
-- 支持能量阈值、静音分段、最大分段时长、增量字幕合并
+推荐直接运行：
 
-### 3) 字幕显示
-- 桌面无边框字幕窗（可置顶、可拖动）
-- 支持透明 PNG 背景渲染
-- 文本框位置/尺寸可编辑，支持渐显动画与自动清屏
+```powershell
+start.bat
+```
 
-### 4) 交互控制
-- 系统托盘菜单：显示/隐藏字幕、打开设置、保存设置、退出
-- `F2` 进入编辑模式（移动/缩放文本框、拖拽背景偏移）
-- `Esc`/关闭窗口：启用托盘时隐藏到托盘，否则退出
-- 设置面板支持模型组合切换、模型下载、保存到配置（重启后生效）
-
-### 5) 配置管理
-- 配置文件读取与类型校验（YAML）
-- 命令行参数覆盖配置文件
-- 运行时窗口布局可保存回配置文件（源码运行默认写回 `config/app.yaml`，打包版默认写到用户目录）
-- 首次启动可交互选择模型组合（源码终端走命令行，打包版走 GUI 对话框）
-- 数据目录和日志目录支持 3 种位置：软件目录、用户目录、自定义目录
-
-## 一键启动（推荐）
-
-直接双击根目录的 [start.bat](C:/Users/littlebai/workspace/personal/anan_subtitle/start.bat)。
-
-脚本会自动完成：
-1. 创建 `.venv`（若不存在）
-2. 安装依赖
-3. 读取 `config/app.yaml`
-4. 启动程序
-
-## 手动启动
+手动开发启动：
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-lock.txt
-python src/main.py --config config\app.yaml
-```
-
-## 开发流程
-
-开发阶段推荐流程：
-
-```powershell
-$env:PYTHONPATH='src'
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe -m compileall src
-```
-
-开发运行：
-
-```powershell
 $env:PYTHONPATH='src'
 .\.venv\Scripts\python.exe src\main.py --config config\app.yaml
 ```
 
-示例（命令行覆盖配置）：
+开发前验证：
 
 ```powershell
-python src/main.py --config config\app.yaml --font-size 36 --x 100 --y 100
+$env:PYTHONPATH='src'
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m compileall src tests
 ```
 
-## 配置说明
-
-源码运行默认配置文件：[config/app.yaml](C:/Users/littlebai/workspace/personal/anan_subtitle/config/app.yaml)  
-模板文件：[config/default.yaml](C:/Users/littlebai/workspace/personal/anan_subtitle/config/default.yaml)
-
-打包版默认会把运行态配置写到用户目录：`%LOCALAPPDATA%\anan_subtitle\config\app.yaml`。首次启动若不存在，会从包内的 `default.yaml` 自动生成。
-
-数据目录和日志目录支持以下位置策略：
-- `app`：软件目录
-- `user`：用户目录（默认）
-- `custom`：自定义目录
-
-默认路径：
-- 打包版数据目录：`%LOCALAPPDATA%\anan_subtitle\data`
-- 打包版日志目录：`%LOCALAPPDATA%\anan_subtitle\logs`
-- 日志文件：`desktop_subtitle.log`
-
-常用配置组：
-- 窗口：`x`, `y`, `width`, `height`, `lock_size_to_bg`, `windowed_mode`, `stay_on_top`, `opacity`
-- 字幕：`font_family`, `font_size`, `text_color`, `text_*`, `text_anim_*`, `subtitle_clear_ms`
-- 背景：`bg_image`, `bg_width`, `bg_height`, `bg_offset_x`, `bg_offset_y`
-- 运行：`show_control_panel`, `tray_icon_enable`
-- 音频：`device`, `samplerate`, `block_ms`, `queue_size`
-- 识别：`energy_threshold`, `silence_ms`, `partial_interval_ms`, `max_segment_seconds`
-- 流式：`chunk_size`, `encoder_chunk_look_back`, `decoder_chunk_look_back`
-- 模型：`model_profile`, `model_download_on_startup`, `model`, `vad_model`, `punc_model`, `disable_vad_model`, `disable_punc_model`
-
-模型组合建议：
-- `model_profile: realtime`：低延迟实时字幕
-- `model_profile: offline`：非实时模型，准确率优先
-- `model_profile: hybrid`：实时模型检测起句 + 非实时模型整句识别
-- `model_profile: custom`：手工指定 `model/vad_model/punc_model`
-
-首次运行会提示选择模型组合，并写回当前运行态配置文件。打包版首次启动会弹出 GUI 对话框，并可立即下载所选模型。  
-如需每次启动前预下载模型，可设置 `model_download_on_startup: true`。
-
-如果首次模型下载失败，错误详情和日志文件路径会直接显示在界面提示里；可优先检查网络、目录权限，以及日志目录中的 `desktop_subtitle.log`。
-
-## 常用命令
-
-查看麦克风设备：
-
-```powershell
-python -m sounddevice
-```
-
-导出默认配置模板：
-
-```powershell
-python src/main.py --dump-default-config config\default.yaml
-```
-
-试用非实时模型并观察延迟（示例）：
-
-```powershell
-python src/main.py --config config\app.yaml --model paraformer-zh
-```
-
-直接按组合切换（推荐）：
-
-```powershell
-python src/main.py --config config\app.yaml --model-profile offline
-```
-
-混合模式（流式检测起句 + 离线整句识别）：
-
-```powershell
-python src/main.py --config config\app.yaml --model-profile hybrid
-```
-
-## Windows 打包
-
-构建 Windows 发布目录：
+Windows 打包：
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-build-lock.txt
 .\scripts\build_windows.ps1
 ```
 
-构建完成后，产物位于 `dist\anan_subtitle\`，主程序是 `dist\anan_subtitle\anan_subtitle.exe`。
-
-快速清理构建产物和测试缓存：
+构建完成后，运行：
 
 ```powershell
-.\scripts\clean.ps1
+.\dist\anan_subtitle\anan_subtitle.exe
 ```
 
-如果需要连同打包版用户目录下的配置、日志和模型缓存一起清掉，并重新触发首次启动向导：
+## 配置与运行目录
 
-```powershell
-.\scripts\clean.ps1 -IncludeUserData
-```
+- 源码运行默认配置：[config/app.yaml](C:/Users/littlebai/workspace/personal/anan_subtitle/config/app.yaml)
+- 模板配置：[config/default.yaml](C:/Users/littlebai/workspace/personal/anan_subtitle/config/default.yaml)
+- 打包版运行态配置默认位置：`%LOCALAPPDATA%\anan_subtitle\config\app.yaml`
+- 数据目录 / 日志目录支持三种位置：`app` / `user` / `custom`
 
-当前打包链路会把这些资源一起带上：
-- `config/default.yaml`
-- `config/base.png`
-- `LICENSE`
-- `README.md`
-- 若存在，则复制 `docs/SMOKE_TEST.md`、`docs/MODEL_SOURCES.md`、`docs/THIRD_PARTY_NOTICES.md`、`docs/PYSIDE6_LGPL_NOTICE.md`
+首次启动会提示选择模型组合。打包版若勾选立即下载模型，失败时界面会显示错误详情和日志路径。
 
-## 延迟日志
+## 文档索引
 
-运行后可在日志中查看离线模式延迟打点：
-- `Offline latency (partial/interval)`：分段内增量字幕延迟
-- `Offline latency (final/silence|max-segment-seconds)`：句子最终结果延迟
-- 指标说明：`lag`（超出音频时长的额外等待）、`tail`（最近音频到输出的等待）、`infer`（推理耗时）
-- `Offline latency summary`：每 5 句输出平均值和 `p95_tail`
-- 打包版默认日志位置：`%LOCALAPPDATA%\anan_subtitle\logs\desktop_subtitle.log`
+完整文档入口见 [docs/INDEX.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/INDEX.md)。
 
-## 备注
+常用文档：
 
-- 首次运行会下载模型，耗时较长。
-- 流式识别调用方式为 `cache + chunk_size + is_final`。
-
-## 许可证
-
-本项目源码采用 [MIT License](C:/Users/littlebai/workspace/personal/anan_subtitle/LICENSE)。
-
-## 第三方开源依赖
-
-本项目当前直接依赖并引用了这些主要开源库：
-
-- `PySide6`：`LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only`
-- `sounddevice`：`MIT`
-- `numpy`：`BSD-3-Clause`
-- `funasr`：当前安装包元数据显示 `MIT`，但 classifier 同时出现 `Apache Software License`，发布前建议继续以其上游仓库声明为准核对一次
-- `modelscope`：`Apache-2.0`
-- `torch`：`BSD-3-Clause`
-- `torchaudio`：`BSD` / `BSD-3-Clause` 风格许可证
-- `PyYAML`：`MIT`
-
-当前仓库中的自有代码没有复制这些第三方库源码，只是通过正常依赖和 API 调用来使用它们；按当前代码形态，没有看到明显的源码许可证冲突。
-
-但有两点需要单独注意：
-
-- `PySide6` 不是 MIT。你的项目源码可以继续采用 MIT，但如果你后续分发 Windows 二进制或打包版，需要额外遵守 `PySide6/Qt` 的 `LGPL` 要求；按当前发布约束，后续打包应采用动态链接方式，并随发布包附带 `LGPL` 声明和相关许可文本。
-- `FunASR` / `ModelScope` 下载的模型权重、模型卡和相关资源，可能有独立于 Python 包本身的使用条款。发布可执行版本前，建议逐个确认你实际分发或自动下载的模型许可，并在 README 或发布说明中注明实际使用模型的来源。
-- 默认背景图片 `config/base.png` 中的人物形象来源于游戏作品，相关版权归游戏及其权利方所有；该资源不属于本项目 `MIT` 授权范围，公开分发前应确认其使用与分发权限。
-
-## 开发文档
-
-- 架构：[docs/ARCHITECTURE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/ARCHITECTURE.md)
-- 现状：[docs/CURRENT_ARCHITECTURE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/CURRENT_ARCHITECTURE.md)
-- 下个目标：[docs/NEXT_TARGET.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/NEXT_TARGET.md)
-- 发布说明：[docs/RELEASE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/RELEASE.md)
+- 架构目标：[docs/ARCHITECTURE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/ARCHITECTURE.md)
+- 当前实现：[docs/CURRENT_ARCHITECTURE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/CURRENT_ARCHITECTURE.md)
+- 下一阶段：[docs/NEXT_TARGET.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/NEXT_TARGET.md)
+- 开发与打包：[docs/DEVELOPMENT_AND_PACKAGING.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/DEVELOPMENT_AND_PACKAGING.md)
+- 发布流程：[docs/RELEASE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/RELEASE.md)
 - 冒烟清单：[docs/SMOKE_TEST.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/SMOKE_TEST.md)
+
+## 许可证与第三方说明
+
+- 项目源码许可证：[LICENSE](C:/Users/littlebai/workspace/personal/anan_subtitle/LICENSE)
 - 第三方说明：[docs/THIRD_PARTY_NOTICES.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/THIRD_PARTY_NOTICES.md)
 - 模型来源：[docs/MODEL_SOURCES.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/MODEL_SOURCES.md)
-- 开发与打包流程：[docs/DEVELOPMENT_AND_PACKAGING.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/DEVELOPMENT_AND_PACKAGING.md)
-- PySide6 LGPL 提示：[docs/PYSIDE6_LGPL_NOTICE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/PYSIDE6_LGPL_NOTICE.md)
+- PySide6 / Qt LGPL 说明：[docs/PYSIDE6_LGPL_NOTICE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/PYSIDE6_LGPL_NOTICE.md)

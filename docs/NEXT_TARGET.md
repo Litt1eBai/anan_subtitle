@@ -1,9 +1,10 @@
 # NEXT TARGET
 
-本文档描述下一阶段的目标，不再追踪历史迁移细节。
+本文档只描述当前阶段目标和下一阶段工作面，不再重复开发、打包和发布细节。
 
 如果你想看目标边界，请查看 [ARCHITECTURE.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/ARCHITECTURE.md)。
 如果你想看当前实现，请查看 [CURRENT_ARCHITECTURE.md](/C:/Users/littlebai/workspace/personal/anan_subtitle/docs/CURRENT_ARCHITECTURE.md)。
+如果你想看开发和发布流程，请查看 [DEVELOPMENT_AND_PACKAGING.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/DEVELOPMENT_AND_PACKAGING.md) 和 [RELEASE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/RELEASE.md)。
 
 ## 当前阶段目标
 
@@ -47,44 +48,18 @@
 - 模型管理体验
 - Windows 发布体验
 
-## 发布准备任务
+## 当前聚焦
 
-### Windows 打包
+下一阶段只聚焦两件事：
 
-- 增加 `PyInstaller` 方案
-- 增加打包脚本
-- 明确输出目录
-- 明确资源拷贝规则
+1. 完成可稳定分发的 Windows 版本
+2. 在稳定基线上继续推进产品功能
 
-### 运行态配置策略
+具体执行流程和检查项不再放在这里，统一查看：
 
-- 明确 `app.yaml` 的用户目录落点
-- 首次启动时从 `default.yaml` 生成运行态配置
-- 避免把运行态配置作为发布基线的一部分
-
-### 依赖收敛
-
-- 固定核心依赖版本
-- 明确 Python 版本
-- 保证构建结果可重复
-
-### 合规材料
-
-- `PySide6` 动态链接分发
-- `LGPL` 声明随包
-- 第三方许可证说明
-- 模型来源说明
-
-### 发布验证
-
-- 启动
-- 首次模型选择
-- 模型下载
-- 麦克风输入
-- 实时/非实时识别
-- 托盘交互
-- 保存配置
-- 退出重启
+- [DEVELOPMENT_AND_PACKAGING.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/DEVELOPMENT_AND_PACKAGING.md)
+- [RELEASE.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/RELEASE.md)
+- [SMOKE_TEST.md](C:/Users/littlebai/workspace/personal/anan_subtitle/docs/SMOKE_TEST.md)
 
 ## 不在当前阶段处理的事
 
